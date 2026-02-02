@@ -13,6 +13,8 @@ This is the official implementation of paper
 
 - Appendix C.6 Text Prompt
 
+- Section 3.4 privacy budget ratio
+
 ### Experiments
 
 - Table 6 epsilon = \infty
