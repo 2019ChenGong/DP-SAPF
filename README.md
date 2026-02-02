@@ -3,7 +3,7 @@
 # DP-SAPF: Saliency-Aware Parameter Fine-tuning of Public Models for Differentially Private Image Synthesis
 </div>
 
-
+This is the official implementation of paper 
 
 ## Todo list
 
