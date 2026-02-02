@@ -202,7 +202,7 @@ if __name__ == "__main__":
     parser.add_argument('--target_size', type=int, default=32)
     parser.add_argument('--gen_size', type=int, default=32)
     parser.add_argument('--repeat', type=int, default=1)
-    parser.add_argument('--num_per_cls', type=int, default=1)
+    parser.add_argument('--num', type=int, default=1)
     parser.add_argument('--output_dir', type=str, default="")
     parser.add_argument('--checkpoint_path', type=str, default=None)
     parser.add_argument('--model_id', type=str, default=None)
@@ -210,7 +210,7 @@ if __name__ == "__main__":
 
     prompt_list = get_prompt(args.data_name)
     prompts = [[prompt, idx] for idx, prompt in enumerate(prompt_list)]
-    prompts = prompts * args.num_per_cls
+    prompts = prompts * (args.num // len(prompt_list))
     # ds = PEDESDataset()
     # print(len(ds))
     # prompts = [example['text'] for example in ds.ds]

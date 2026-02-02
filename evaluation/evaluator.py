@@ -62,16 +62,7 @@ class Evaluator(object):
         # If the images are in color but only one channel is expected, convert to grayscale.
         if synthetic_images.shape[1] == 3 and self.config.sensitive_data.num_channels == 1:
             synthetic_images = 0.299 * synthetic_images[:, 2:, ...] + 0.587 * synthetic_images[:, 1:2, ...] + 0.114 * synthetic_images[:, :1, ...]
-
-        # Calculate visual metrics: FID, Inception Score, FLD, precision, recall, and ImageReward.
-        fid, is_mean, fld, p, r = self.visual_metric(synthetic_images, synthetic_labels, sensitive_train_loader, sensitive_test_loader)
-        logging.info("The FID of synthetic images is {}".format(fid))
-        logging.info("The Inception Score of synthetic images is {}".format(is_mean))
-        logging.info("The Precision and Recall of synthetic images is {} and {}".format(p, r))
-        logging.info("The FLD of synthetic images is {}".format(fld))
-        # logging.info("The ImageReward of synthetic images is {}".format(ir))
-        torch.cuda.empty_cache()
-
+        
         acc_list = []
 
         # If the image resolution is greater than 32, use only the first two models.
@@ -101,6 +92,15 @@ class Evaluator(object):
         
         logging.info(f"The average and std of accuracy of synthetic images are {acc_mean:.2f} and {acc_std:.2f}")
 
+        torch.cuda.empty_cache()
+
+        # Calculate visual metrics: FID, Inception Score, FLD, precision, recall, and ImageReward.
+        fid, is_mean, fld, p, r = self.visual_metric(synthetic_images, synthetic_labels, sensitive_train_loader, sensitive_test_loader)
+        logging.info("The FID of synthetic images is {}".format(fid))
+        logging.info("The Inception Score of synthetic images is {}".format(is_mean))
+        logging.info("The Precision and Recall of synthetic images is {} and {}".format(p, r))
+        logging.info("The FLD of synthetic images is {}".format(fld))
+        # logging.info("The ImageReward of synthetic images is {}".format(ir))
         torch.cuda.empty_cache()
 
     def eval_fidelity(self, synthetic_images, synthetic_labels, sensitive_train_loader, sensitive_val_loader, sensitive_test_loader):
@@ -239,8 +239,12 @@ class Evaluator(object):
             batch_size = 256
             if synthetic_images.shape[-1] == 64:
                 n_splits = 16
+            elif synthetic_images.shape[-1] == 96:
+                n_splits = 32
             elif synthetic_images.shape[-1] == 128:
                 n_splits = 64
+            elif synthetic_images.shape[-1] == 256:
+                n_splits = 128
             else:
                 n_splits = 1
             max_epoch = 50

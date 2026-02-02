@@ -11,13 +11,13 @@ setup:
 public_data:
   name: null
 sensitive_data:
-  name: cifar10
+  name: camelyon_96
   num_channels: 3
-  resolution: 32
-  n_classes: 10
-  train_path: dataset/cifar10/train_32.zip
-  test_path: dataset/cifar10/test_32.zip
-  fid_stats: dataset/cifar10/fid_stats_32.npz
+  resolution: 96
+  n_classes: 2
+  train_path: dataset/camelyon/train_96.zip
+  test_path: dataset/camelyon/test_96.zip
+  fid_stats: exp/fid_stats_96.npz
 model:
   api: improved_diffusion
   feature_extractor: inception_v3
@@ -32,10 +32,10 @@ model:
     rescale_learned_sigmas: false
     rescale_timesteps: false
     use_ddim: true
-    timestep_respacing: 100
+    timestep_respacing: ddim10
     batch_size: 2000
     model_path: models/pretrained_models/imagenet64_cond_270M_250K.pt
-  private_num_classes: 10
+  private_num_classes: 2
   public_num_classes: 1000
   ckpt: null
 pretrain:
@@ -44,9 +44,11 @@ pretrain:
 train:
   batch_size: 2000
   feature_extractor_batch_size: 500
-  private_image_size: 32
-  private_num_classes: 10
+  private_image_size: 96
+  private_num_classes: 2
   num_samples_schedule:
+  - 24000
+  - 24000
   - 24000
   - 24000
   - 24000
@@ -55,29 +57,31 @@ train:
   - 24000
   variation_degree_schedule:
   - 0
-  - 2
-  - 4
-  - 6
-  - 8
-  - 10
+  - 0
+  - 0
+  - 0
+  - 0
+  - 1
+  - 1
+  - 1
   initial_prompt: null
   image_size: 64x64
-  lookahead_degree: 1
+  lookahead_degree: 8
   num_nearest_neighbor: 1
   nn_mode: L2
-  count_threshold: 15.0
+  count_threshold: 4.0
   log_dir: null
-  tmp_folder: dataset/cifar10/pe_tmp
+  tmp_folder: dataset/camelyon/pe_tmp
   dp:
-    epsilon: 1.0
+    epsilon: 10.0
     delta: 1e-5
   n_splits: 1
 gen:
-  data_num: 60000
+  data_num: 6000
   batch_size: 1000
   log_dir: null
   num_channels: 3
-  resolution: 32
+  resolution: 96
 eval:
   batch_size: 1000
   mode: val

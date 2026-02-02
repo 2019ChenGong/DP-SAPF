@@ -183,10 +183,14 @@ def struct_output(args, accelerator):
         else:
             actual_logger = logger
 
+        log_file_abs = os.path.abspath(log_file)
         for handler in actual_logger.handlers:
-            if isinstance(handler, logging.FileHandler) and handler.baseFilename.endswith(log_file):
-                return
-        file_handler = logging.FileHandler(log_file, mode="a", encoding="utf-8")
+            if isinstance(handler, logging.FileHandler) and handler.baseFilename == log_file_abs:
+                return  # 已存在，安全退出
+        # print("0000000000")
+        actual_logger.setLevel(logging.INFO)
+
+        file_handler = logging.FileHandler(log_file_abs, mode="a", encoding="utf-8")
         file_handler.setLevel(logging.INFO)
         formatter = logging.Formatter(
             fmt="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -786,6 +790,10 @@ def parse_args(input_args=None):
         action="store_true",
         help="Whether we are finetuning MLP layers as well.",
     )
+    parser.add_argument("--attn_only",
+        action="store_true",
+        help="Whether we are finetuning MLP layers as well.",
+    )
     parser.add_argument("--text_tune_mlp",
         action="store_true",
         help="Whether we are finetuning MLP layers as well.",
@@ -986,16 +994,31 @@ def main(args):
         vae.requires_grad_(False)
     text_encoder.requires_grad_(False)
     unet.requires_grad_(False)
-    def freeze_non_linear_layers(model):
+    def freeze_non_linear_layers(model, attn_only=False):
         from diffusers.models.lora import LoRACompatibleLinear
 
-        # 重新启用 nn.Linear 层的梯度
-        for module in model.modules():
-            if isinstance(module, torch.nn.Linear) or isinstance(module, LoRACompatibleLinear):
-                for param in module.parameters():
-                    param.requires_grad = True
+        if attn_only:
+            # Only unfreeze Linear layers inside attention blocks (to_q, to_k, to_v, to_out)
+            def _unfreeze_attn_linears(module_name, module):
+                if isinstance(module, (torch.nn.Linear, LoRACompatibleLinear)):
+                    # Check if this linear is part of attention projection
+                    if any(kw in module_name for kw in ['to_q', 'to_k', 'to_v', 'to_out']):
+                        for param in module.parameters():
+                            param.requires_grad = True
 
-    freeze_non_linear_layers(unet)
+            # Recursively apply with module names
+            for name, module in model.named_modules():
+                _unfreeze_attn_linears(name, module)
+        else:
+            # Unfreeze all Linear and LoRACompatibleLinear layers
+            for module in model.modules():
+                if accelerator.is_main_process:
+                    print(module)
+                if isinstance(module, (torch.nn.Conv2d, torch.nn.Linear, LoRACompatibleLinear)):
+                    for param in module.parameters():
+                        param.requires_grad = True
+
+    freeze_non_linear_layers(unet, args.attn_only)
     # unet.requires_grad_(False)
 
     # For mixed precision training we cast all non-trainable weigths (vae, non-lora text_encoder and non-lora unet) to half-precision
