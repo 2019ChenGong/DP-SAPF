@@ -1011,12 +1011,13 @@ def main(args):
                 _unfreeze_attn_linears(name, module)
         else:
             # Unfreeze all Linear and LoRACompatibleLinear layers
-            for module in model.modules():
-                if accelerator.is_main_process:
-                    print(module)
-                if isinstance(module, (torch.nn.Conv2d, torch.nn.Linear, LoRACompatibleLinear)):
-                    for param in module.parameters():
-                        param.requires_grad = True
+            unet.requires_grad_(True)
+            # for module in model.modules():
+            #     if accelerator.is_main_process:
+            #         print(module, isinstance(module, (torch.nn.Conv2d, torch.nn.Linear, LoRACompatibleLinear)))
+            #     if isinstance(module, (torch.nn.Conv2d, torch.nn.Linear, LoRACompatibleLinear)):
+            #         for param in module.parameters():
+            #             param.requires_grad = True
 
     freeze_non_linear_layers(unet, args.attn_only)
     # unet.requires_grad_(False)
