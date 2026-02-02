@@ -1,6 +1,9 @@
 <div align=center>
+
 # DP-SAPF: Saliency-Aware Parameter Fine-tuning of Public Models for Differentially Private Image Synthesis
 </div>
+
+
 
 ## Todo list
 
