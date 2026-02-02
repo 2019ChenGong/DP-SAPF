@@ -5,6 +5,7 @@
 *.cpp
 *.so
 exp/*
+exp
 debug.py
 
 DP-LDM/
