@@ -10,13 +10,13 @@
 
 ### Experiments
 
-Table 6 epsilon = \infty
+- Table 6 epsilon = \infty
 
-Hyper-parameter analysis: $\epsilon = \{0.2, 1.0, 5.0, 10, 15, 20\}$ for cifar10, celeba, SD-v1-5;  Selection ratio $ p = \{0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8\}$ for cifar10, celeba, SD-v1-5.
+- Hyper-parameter analysis: $\epsilon = \{0.2, 1.0, 5.0, 10, 15, 20\}$ for cifar10, celeba, SD-v1-5;  Selection ratio $ p = \{0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8\}$ for cifar10, celeba, SD-v1-5.
 
-Abalation studies in Table 5.
+- Abalation studies in Table 5.
 
-visulization
+- visulization
 
 
 ## Acknowledgement
