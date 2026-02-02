@@ -1,4 +1,0 @@
-CUDA_VISIBLE_DEVICES=0 python eval.py -m PE -dn celeba_male_256 -ep /p/fzv6enresearch/gap/exp/lora_celeba_male_256_4096bs_1ksteps_eps1/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005 &
-CUDA_VISIBLE_DEVICES=1 python eval.py -m PE -dn celeba_male_256 -ep /p/fzv6enresearch/gap/exp/lora_celeba_male_256_4096bs_1ksteps_eps1/lora_k4q4v4o4_base_0.0005 &
-CUDA_VISIBLE_DEVICES=2 python eval.py -m PE -dn celeba_male_256 -ep /p/fzv6enresearch/gap/exp/lora_celeba_male_256_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_0.0005 &
-CUDA_VISIBLE_DEVICES=3 python eval.py -m PE -dn camelyon_96 -ep /p/fzv6enresearch/gap/exp/lora_camelyon_96_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005
