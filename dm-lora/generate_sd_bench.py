@@ -214,7 +214,6 @@ if __name__ == "__main__":
     # print(len(ds))
     # prompts = [example['text'] for example in ds.ds]
 
-    # ds = Flickr30kDataset(image_dir='/bigtemp/fzv6en/kecen/flickr/', json_path='/bigtemp/fzv6en/kecen/dataset_flickr30k.json', split='train')
     # prompts = [example['text'] for example in ds.data]
 
     # ds = RocoDataset(max_images=None)
