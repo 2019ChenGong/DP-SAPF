@@ -97,10 +97,12 @@ analyze_dp*
 compute_dp_epsilon.py
 anvil
 
-run*
+# run*
+run*.sh
 metrics
 
 cal_complexity.py
 metric_dpfid_test.py
 metric_test.py
 test_scripts.sh
+run_metric.py
