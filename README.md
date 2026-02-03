@@ -11,8 +11,6 @@ This is the official implementation of paper
 
 - Appendix C.5 Hyper-parameter Settings of DP-SAPF
 
-- Appendix C.6 Text Prompt
-
 ### Experiments
 
 - Table 6 epsilon = \infty

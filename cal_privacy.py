@@ -63,7 +63,7 @@ class RDPAccountant(IAccountant):
             # print(rdp)
             ratio = list(np.array(rdp) / sum(rdp) * 100)
             ratio = [str(round(float(ratio_i), 2)) for ratio_i in ratio]
-            print('RDP cost ratio of time, frequency, and dpsgd: ' + ' / '.join(ratio))
+            print('RDP cost ratio of selection and dpsgd: ' + ' / '.join(ratio))
         rdp = sum(rdp)
         eps, best_alpha = privacy_analysis.get_privacy_spent(
             orders=alphas, rdp=rdp, delta=delta
@@ -95,19 +95,18 @@ def main(config):
     sensitive_train_loader, _, _, _, config = load_data(config)
     accountant = RDPAccountant()
 
-    sigma_f = config.train.sigma_freq
-    sigma_t = config.train.sigma_time
-    accountant.history = [(sigma_t, config.public_data.central.batch_size/len(sensitive_train_loader.dataset), config.public_data.central.sample_num), (sigma_f, 1., 1)]
-    sample_rate = 1 / len(sensitive_train_loader)
+    sigma_s = 5
+    accountant.history = [(sigma_s, min(50000/len(sensitive_train_loader.dataset), 1.), 1)]
+    sample_rate = 4096 / len(sensitive_train_loader.dataset)
     sigma_sgd = get_noise_multiplier(
                 target_epsilon=config.train.dp.epsilon,
                 target_delta=config.train.dp.delta,
                 sample_rate=sample_rate,
-                epochs=config.train.n_epochs,
+                steps=1000,
                 accountant=accountant.mechanism(),
                 account_history=accountant.history,
             )
-    accountant.history.append((sigma_sgd, sample_rate, int(config.train.n_epochs / sample_rate)))
+    accountant.history.append((sigma_sgd, sample_rate, 1000))
 
     eps, alpha = accountant.get_privacy_spent(delta=config.train.dp.delta)
     eps, alpha = accountant.get_privacy_spent(delta=config.train.dp.delta, alphas=alpha)
@@ -115,7 +114,7 @@ def main(config):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--config_dir', default="configs")
-    parser.add_argument('--method', '-m', default="DP-FETA-Pro")
+    parser.add_argument('--method', '-m', default="PE")
     parser.add_argument('--epsilon', '-e', default="10.0")
     parser.add_argument('--data_name', '-dn', default="mnist_28")
     parser.add_argument('--exp_description', '-ed', default="")

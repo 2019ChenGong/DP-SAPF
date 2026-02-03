@@ -67,7 +67,7 @@ class Evaluator(object):
 
         # If the image resolution is greater than 32, use only the first two models.
         if synthetic_images.shape[-1] > 32:
-            self.acc_models = self.acc_models[:2]
+            self.acc_models = self.acc_models[1:2]
 
         # Loop over each model and compute accuracy metrics.
         for model_name in self.acc_models:
@@ -195,6 +195,10 @@ class Evaluator(object):
         #         ir += np.sum(score)
         
         # ir /= len(synthetic_images)
+
+        if len(train_feat) > len(gen_feat):
+            indices = torch.randperm(len(train_feat), device=train_feat.device)[:len(gen_feat)]
+            train_feat = train_feat[indices]
 
         is_mean, _ = compute_inception_score_from_logits(gen_logit)
         fid = FID().compute_metric(train_feat, None, gen_feat)
