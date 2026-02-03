@@ -3,7 +3,7 @@ import numpy as np
 import sys
 import argparse
 
-from data.dataset_loader import load_data
+from data.dataset_loader import load_data, MemmapDataset
 from utils.utils import set_logger, parse_config
 from evaluation.evaluator import Evaluator
 os.environ['MKL_NUM_THREADS'] = "1"
@@ -14,14 +14,24 @@ def main(config):
     set_logger(open(config.setup.workdir, 'a'))
     sensitive_train_loader, sensitive_val_loader, sensitive_test_loader, _ , _= load_data(config)
 
-    syn = np.load(config.gen.log_dir)
-    syn_data, syn_labels = syn["x"], syn["y"]
-    print(syn_data.shape)
+    if os.path.exists(config.gen.log_dir):
+        syn = np.load(config.gen.log_dir)
 
+        syn_data, syn_labels = syn["x"], syn["y"]
+        print(syn_data.shape)
+
+        np.save(os.path.join(config.gen.log_dir[:-7], "syn_images.npy"), syn_data)
+        np.save(os.path.join(config.gen.log_dir[:-7], "syn_labels.npy"), syn_labels)
+
+        os.remove(config.gen.log_dir)
+
+        del syn_data, syn_labels, syn
+        import gc; gc.collect()
+    syn_dataset = MemmapDataset(os.path.join(config.gen.log_dir[:-7], "syn_images.npy"), os.path.join(config.gen.log_dir[:-7], "syn_labels.npy"), c=config.sensitive_data.num_channels, size=config.sensitive_data.resolution, num_classes=config.sensitive_data.n_classes)
     evaluator = Evaluator(config)
     
-    # evaluator.eval(syn_data, syn_labels, sensitive_train_loader, sensitive_val_loader, sensitive_test_loader)
-    evaluator.eval_fidelity(syn_data, syn_labels, sensitive_train_loader, sensitive_val_loader, sensitive_test_loader)
+    evaluator.eval(syn_dataset, sensitive_train_loader, sensitive_val_loader, sensitive_test_loader)
+    # evaluator.eval_fidelity(syn_dataset, sensitive_train_loader, sensitive_val_loader, sensitive_test_loader)
 
 
 if __name__ == '__main__':

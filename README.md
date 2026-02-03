@@ -27,9 +27,9 @@ We provide an example for how to reproduce the results on CIFAR-10 in our paper.
 
 ### 3.1 Installation
 
-To setup the environment of DP-SAPF, we use `conda` to manage our dependencies. 
+To set up the environment of DP-SAPF, we use `conda` to manage our dependencies. 
 
-Run the following commands to install the enviroments for training and evaluation:
+Run the following commands to install the environments for training and evaluation:
  ```
 bash install.sh
 bash install_lora.sh
@@ -64,7 +64,7 @@ The FID and Acc on the testset will be saved into `exp/lora_cifar10_32_4096bs_1k
 
 ### Writing
 
-- README.md 
+- Motivation
 
 ### Experiments
 

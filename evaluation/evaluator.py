@@ -18,7 +18,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader, TensorDataset, random_split
 
 import logging
 
@@ -49,29 +49,29 @@ class Evaluator(object):
         # Clear the GPU cache to free memory.
         torch.cuda.empty_cache()
     
-    def eval(self, synthetic_images, synthetic_labels, sensitive_train_loader, sensitive_val_loader, sensitive_test_loader):
+    def eval(self, syn_dataset, sensitive_train_loader, sensitive_val_loader, sensitive_test_loader):
         
         # Proceed only if this is the main process and a test loader is provided.
         if self.config.setup.global_rank != 0 or sensitive_test_loader is None:
             return
         
         # Check if the synthetic images have the expected resolution.
-        if synthetic_images.shape[-1] != self.config.sensitive_data.resolution:
-            synthetic_images = F.interpolate(torch.from_numpy(synthetic_images), size=[self.config.sensitive_data.resolution, self.config.sensitive_data.resolution]).numpy()
+        # if synthetic_images.shape[-1] != self.config.sensitive_data.resolution:
+        #     synthetic_images = F.interpolate(torch.from_numpy(synthetic_images), size=[self.config.sensitive_data.resolution, self.config.sensitive_data.resolution]).numpy()
 
-        # If the images are in color but only one channel is expected, convert to grayscale.
-        if synthetic_images.shape[1] == 3 and self.config.sensitive_data.num_channels == 1:
-            synthetic_images = 0.299 * synthetic_images[:, 2:, ...] + 0.587 * synthetic_images[:, 1:2, ...] + 0.114 * synthetic_images[:, :1, ...]
+        # # If the images are in color but only one channel is expected, convert to grayscale.
+        # if synthetic_images.shape[1] == 3 and self.config.sensitive_data.num_channels == 1:
+        #     synthetic_images = 0.299 * synthetic_images[:, 2:, ...] + 0.587 * synthetic_images[:, 1:2, ...] + 0.114 * synthetic_images[:, :1, ...]
         
         acc_list = []
 
         # If the image resolution is greater than 32, use only the first two models.
-        if synthetic_images.shape[-1] > 32:
+        if syn_dataset.size > 32:
             self.acc_models = self.acc_models[1:2]
 
         # Loop over each model and compute accuracy metrics.
         for model_name in self.acc_models:
-            acc, test_acc_on_val, test_acc_on_test, best_noisy_acc, best_test_acc_on_noisy_val = self.cal_acc(model_name, synthetic_images, synthetic_labels, sensitive_val_loader, sensitive_test_loader)
+            acc, test_acc_on_val, test_acc_on_test, best_noisy_acc, best_test_acc_on_noisy_val = self.cal_acc(model_name, syn_dataset, sensitive_val_loader, sensitive_test_loader)
             
             # Log the accuracy results.
             if sensitive_val_loader is not None:
@@ -95,7 +95,7 @@ class Evaluator(object):
         torch.cuda.empty_cache()
 
         # Calculate visual metrics: FID, Inception Score, FLD, precision, recall, and ImageReward.
-        fid, is_mean, fld, p, r = self.visual_metric(synthetic_images, synthetic_labels, sensitive_train_loader, sensitive_test_loader)
+        fid, is_mean, fld, p, r = self.visual_metric(syn_dataset, sensitive_train_loader, sensitive_test_loader)
         logging.info("The FID of synthetic images is {}".format(fid))
         logging.info("The Inception Score of synthetic images is {}".format(is_mean))
         logging.info("The Precision and Recall of synthetic images is {} and {}".format(p, r))
@@ -103,21 +103,21 @@ class Evaluator(object):
         # logging.info("The ImageReward of synthetic images is {}".format(ir))
         torch.cuda.empty_cache()
 
-    def eval_fidelity(self, synthetic_images, synthetic_labels, sensitive_train_loader, sensitive_val_loader, sensitive_test_loader):
+    def eval_fidelity(self, syn_dataset, sensitive_train_loader, sensitive_val_loader, sensitive_test_loader):
 
         # Proceed only if this is the main process and a test loader is provided.
         if str(self.device) != 'cuda:0' or sensitive_test_loader is None:
             return
         
         # Check if the synthetic images have the expected resolution.
-        if synthetic_images.shape[-1] != self.config.sensitive_data.resolution:
-            synthetic_images = F.interpolate(torch.from_numpy(synthetic_images), size=[self.config.sensitive_data.resolution, self.config.sensitive_data.resolution]).numpy()
+        # if synthetic_images.shape[-1] != self.config.sensitive_data.resolution:
+        #     synthetic_images = F.interpolate(torch.from_numpy(synthetic_images), size=[self.config.sensitive_data.resolution, self.config.sensitive_data.resolution]).numpy()
         
-        # If the images are in color but only one channel is expected, convert to grayscale.
-        if synthetic_images.shape[1] == 3 and self.config.sensitive_data.num_channels == 1:
-            synthetic_images = 0.299 * synthetic_images[:, 2:, ...] + 0.587 * synthetic_images[:, 1:2, ...] + 0.114 * synthetic_images[:, :1, ...]
+        # # If the images are in color but only one channel is expected, convert to grayscale.
+        # if synthetic_images.shape[1] == 3 and self.config.sensitive_data.num_channels == 1:
+        #     synthetic_images = 0.299 * synthetic_images[:, 2:, ...] + 0.587 * synthetic_images[:, 1:2, ...] + 0.114 * synthetic_images[:, :1, ...]
         
-        fid, is_mean, fld, p, r = self.visual_metric(synthetic_images, synthetic_labels, sensitive_train_loader, sensitive_test_loader)
+        fid, is_mean, fld, p, r = self.visual_metric(syn_dataset, sensitive_train_loader, sensitive_test_loader)
         logging.info("The FID of synthetic images is {}".format(fid))
         logging.info("The Inception Score of synthetic images is {}".format(is_mean))
         logging.info("The Precision and Recall of synthetic images is {} and {}".format(p, r))
@@ -126,7 +126,7 @@ class Evaluator(object):
 
         return fid, is_mean, p, r, fld
     
-    def visual_metric(self, synthetic_images, synthetic_labels, sensitive_train_loader, sensitive_test_loader):
+    def visual_metric_(self, synthetic_images, synthetic_labels, sensitive_train_loader, sensitive_test_loader):
 
         # Create an inception-based feature extractor. The save_path is based on the dataset name and resolution.
         feature_extractor = InceptionFeatureExtractor(save_path="dataset/{}_{}/".format(self.config.sensitive_data.name, self.config.sensitive_data.resolution))
@@ -173,30 +173,6 @@ class Evaluator(object):
             train_feat = feature_extractor.get_tensor_features(train_images, name="train")
             test_feat = feature_extractor.get_tensor_features(test_images, name="test")
 
-        # Determine the number of unique classes in the synthetic labels.
-        num_classes = len(set(synthetic_labels))
-        del gen_images, synthetic_images
-
-        # Load the image reward model.
-        # rm_model = RM.load("ImageReward-v1.0")
-        # ir = 0
-        # prompt = get_prompt(self.config.sensitive_data.name)
-
-        # # Compute the image reward score for each class without tracking gradients.
-        # with torch.no_grad():
-        #     for cls in range(num_classes):
-
-        #         # Select images for the current class, scale to 0-255, and convert to unsigned 8-bit integers.
-        #         imgs = (synthetic_images[synthetic_labels==cls] * 255.).astype('uint8')
-        #         imgs = np.transpose(imgs, (0, 2, 3, 1))
-        #         if imgs.shape[-1] == 1:
-        #             imgs = np.repeat(imgs, 3, axis=-1)
-        #         imgs = [Image.fromarray(img) for img in imgs]
-        #         score = rm_model.score(prompt[cls], imgs)
-        #         ir += np.sum(score)
-        
-        # ir /= len(synthetic_images)
-
         if len(train_feat) > len(gen_feat):
             indices = torch.randperm(len(train_feat), device=train_feat.device)[:len(gen_feat)]
             train_feat = train_feat[indices]
@@ -212,19 +188,147 @@ class Evaluator(object):
 
         return fid, is_mean, fld, p, r
     
-    def cal_acc(self, model_name, synthetic_images, synthetic_labels, sensitive_val_loader, sensitive_test_loader):
+
+    def visual_metric(self, synthetic_dataset, sensitive_train_loader, sensitive_test_loader):
+        """
+        Compute visual metrics (FID, IS, FLD, Precision, Recall) using memory-efficient batched feature extraction.
+        
+        Args:
+            synthetic_dataset: MemmapDataset containing synthetic images (supports mmap, returns [-1,1] tensors)
+            sensitive_train_loader: DataLoader for real training data (returns [0,1] tensors)
+            sensitive_test_loader: DataLoader for real test data (returns [0,1] tensors)
+        
+        Returns:
+            fid, is_mean, fld, precision, recall
+        """
+        # Create inception-based feature extractor with caching
+        feature_extractor = InceptionFeatureExtractor(
+            save_path=f"dataset/{self.config.sensitive_data.name}_{self.config.sensitive_data.resolution}/"
+        )
+        fc_layer = fid_inception_v3().fc
+        fc_layer = fc_layer.to(self.device).eval()
+
+        # ==================== 1. Extract synthetic features (BATCHED) ====================
+        gen_feat_list = []
+        gen_logit_list = []
+        
+        # Use small batch size for 256x256 images to avoid GPU OOM
+        syn_batch_size = 1000
+        syn_loader = DataLoader(
+            synthetic_dataset,
+            batch_size=syn_batch_size,
+            shuffle=False,
+            num_workers=2,
+            pin_memory=True,
+            drop_last=False
+        )
+        
+        with torch.no_grad():
+            for batch_idx, (images, _) in enumerate(syn_loader):
+                
+                # Ensure 3 channels (for grayscale datasets)
+                if images.shape[1] == 1:
+                    images = images.repeat(1, 3, 1, 1)
+                
+                images = images.to(self.device, non_blocking=True)
+                
+                # Extract features
+                batch_feat = feature_extractor.get_tensor_features(images)  # Already on CPU
+                gen_feat_list.append(batch_feat)
+                
+                # Compute logits for IS (on GPU for speed)
+                batch_logit = fc_layer(batch_feat.to(self.device))
+                gen_logit_list.append(batch_logit.cpu())
+                
+                # Optional: Progress logging
+                if batch_idx % 10 == 0:
+                    logging.info(f"Processed {min((batch_idx+1)*syn_batch_size, len(synthetic_dataset))}/{len(synthetic_dataset)} synthetic images")
+        
+        # Concatenate all features/logits
+        gen_feat = torch.cat(gen_feat_list, dim=0)
+        gen_logit = torch.cat(gen_logit_list, dim=0).numpy()
+        gen_logit = np.exp(gen_logit) / np.sum(np.exp(gen_logit), axis=1, keepdims=True)
+        
+        # Clear GPU memory
+        del gen_feat_list, gen_logit_list
+        torch.cuda.empty_cache()
+
+        # ==================== 2. Extract real train/test features (with caching) ====================
+        # Try to load cached features first (avoids re-extraction)
+        try:
+            train_feat = feature_extractor.get_tensor_features(
+                torch.tensor([0]), name="train"  # Dummy tensor triggers cache load
+            )
+            test_feat = feature_extractor.get_tensor_features(
+                torch.tensor([0]), name="test"
+            )
+            logging.info("Loaded cached real features from disk")
+        except Exception as e:
+            logging.warning(f"Cache load failed ({e}), extracting features from loaders...")
+            
+            # Extract train features in batches (avoid OOM)
+            train_feat_list = []
+            for x, _ in sensitive_train_loader:
+                x = x.float()
+                if x.shape[1] == 1:
+                    x = x.repeat(1, 3, 1, 1)
+                # Real data loaders typically return [0,1] - no conversion needed
+                batch_feat = feature_extractor.get_tensor_features(x, name="train")
+                train_feat_list.append(batch_feat)
+            train_feat = torch.cat(train_feat_list, dim=0)
+            
+            # Extract test features in batches
+            test_feat_list = []
+            for x, _ in sensitive_test_loader:
+                x = x.float()
+                if x.shape[1] == 1:
+                    x = x.repeat(1, 3, 1, 1)
+                batch_feat = feature_extractor.get_tensor_features(x, name="test")
+                test_feat_list.append(batch_feat)
+            test_feat = torch.cat(test_feat_list, dim=0)
+            
+            logging.info("Real features extracted and cached to disk")
+
+        # ==================== 3. Compute metrics ====================
+        # Balance dataset sizes for fair comparison
+        if len(train_feat) > len(gen_feat):
+            indices = torch.randperm(len(train_feat), device=train_feat.device)[:len(gen_feat)]
+            train_feat = train_feat[indices]
+
+        # Inception Score
+        is_mean, _ = compute_inception_score_from_logits(gen_logit)
+        
+        # FID
+        fid = FID().compute_metric(train_feat, None, gen_feat)
+        
+        # FLD (Fake Likelihood Divergence)
+        fld = FLD(eval_feat="train").compute_metric(train_feat, test_feat, gen_feat)
+        
+        # Precision & Recall
+        try:
+            precision = PrecisionRecall(mode="Precision").compute_metric(train_feat, None, gen_feat)
+            recall = PrecisionRecall(mode="Recall", num_neighbors=5).compute_metric(train_feat, None, gen_feat)
+        except Exception as e:
+            logging.warning(f"Precision/Recall computation failed: {e}")
+            precision = recall = 0.0
+
+        return fid, is_mean, fld, precision, recall
+    
+    def cal_acc(self, model_name, syn_dataset, sensitive_val_loader, sensitive_test_loader):
 
         # Set a fixed random seed and shuffle the synthetic images and labels.
-        rng = np.random.default_rng(seed=0)
-        indices = rng.permutation(len(synthetic_images))
-        synthetic_images = synthetic_images[indices]
-        synthetic_labels = synthetic_labels[indices]
+        # rng = np.random.default_rng(seed=0)
+        # indices = rng.permutation(len(synthetic_images))
+        # synthetic_images = synthetic_images[indices]
+        # synthetic_labels = synthetic_labels[indices]
+        # print(0)
 
         # Split the shuffled data into a training set and a validation set.
-        synthetic_images_train, synthetic_images_val = synthetic_images[:55000], synthetic_images[55000:]
-        synthetic_labels_train, synthetic_labels_val = synthetic_labels[:55000], synthetic_labels[55000:]
+        syn_dataset_train_set, syn_dataset_val_set = random_split(syn_dataset, [55000, 5000])
+        # synthetic_images_train, synthetic_images_val = synthetic_images[:55000], synthetic_images[55000:]
+        # synthetic_labels_train, synthetic_labels_val = synthetic_labels[:55000], synthetic_labels[55000:]
     
-        num_classes = len(set(synthetic_labels))
+        num_classes = syn_dataset.num_classes
         criterion = nn.CrossEntropyLoss()
 
         if 'cifar' in self.config.sensitive_data.name:
@@ -232,33 +336,33 @@ class Evaluator(object):
             max_epoch = 200
             n_splits = 1
             if model_name == "wrn":
-                model = WideResNet(in_c=synthetic_images.shape[1], img_size=synthetic_images.shape[2], num_classes=num_classes, depth=28, widen_factor=10, dropRate=0.3)
+                model = WideResNet(in_c=syn_dataset.c, img_size=syn_dataset.size, num_classes=num_classes, depth=28, widen_factor=10, dropRate=0.3)
             elif model_name == "resnet":
-                model = ResNet(in_c=synthetic_images.shape[1], img_size=synthetic_images.shape[2], num_classes=num_classes, depth=164, block_name='BasicBlock')
+                model = ResNet(in_c=syn_dataset.c, img_size=syn_dataset.size, num_classes=num_classes, depth=164, block_name='BasicBlock')
             elif model_name == "resnext":
-                model = ResNeXt(in_c=synthetic_images.shape[1], img_size=synthetic_images.shape[2], cardinality=8, depth=28, num_classes=num_classes, widen_factor=10, dropRate=0.3)
+                model = ResNeXt(in_c=syn_dataset.c, img_size=syn_dataset.size, cardinality=8, depth=28, num_classes=num_classes, widen_factor=10, dropRate=0.3)
 
             optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
             scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=60, gamma=0.2)
         else:
             batch_size = 256
-            if synthetic_images.shape[-1] == 64:
+            if syn_dataset.size == 64:
                 n_splits = 16
-            elif synthetic_images.shape[-1] == 96:
+            elif syn_dataset.size == 96:
                 n_splits = 32
-            elif synthetic_images.shape[-1] == 128:
+            elif syn_dataset.size == 128:
                 n_splits = 64
-            elif synthetic_images.shape[-1] == 256:
-                n_splits = 128
+            elif syn_dataset.size == 256:
+                n_splits = 8
             else:
                 n_splits = 1
             max_epoch = 50
             if model_name == "wrn":
-                model = WideResNet(in_c=synthetic_images.shape[1], img_size=synthetic_images.shape[2], num_classes=num_classes, dropRate=0.3)
+                model = WideResNet(in_c=syn_dataset.c, img_size=syn_dataset.size, num_classes=num_classes, dropRate=0.3)
             elif model_name == "resnet":
-                model = ResNet(in_c=synthetic_images.shape[1], img_size=synthetic_images.shape[2], num_classes=num_classes)
+                model = ResNet(in_c=syn_dataset.c, img_size=syn_dataset.size, num_classes=num_classes)
             elif model_name == "resnext":
-                model = ResNeXt(in_c=synthetic_images.shape[1], img_size=synthetic_images.shape[2], num_classes=num_classes, dropRate=0.3)
+                model = ResNeXt(in_c=syn_dataset.c, img_size=syn_dataset.size, num_classes=num_classes, dropRate=0.3)
 
             optimizer = optim.Adam(model.parameters(), lr=0.01)       
             scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=20, gamma=0.2)
@@ -268,13 +372,13 @@ class Evaluator(object):
 
         ema = ExponentialMovingAverage(model.parameters(), 0.9999)
 
-        train_loader = DataLoader(TensorDataset(torch.from_numpy(synthetic_images_train).float(), torch.from_numpy(synthetic_labels_train).long()), shuffle=True, batch_size=batch_size//n_splits)
+        train_loader = DataLoader(syn_dataset_train_set, shuffle=True, batch_size=batch_size//n_splits, num_workers=4)
 
         if sensitive_val_loader is None:
-            val_loader = DataLoader(TensorDataset(torch.from_numpy(synthetic_images_val).float(), torch.from_numpy(synthetic_labels_val).long()), shuffle=True, batch_size=batch_size//n_splits)
+            val_loader = DataLoader(syn_dataset_val_set, shuffle=False, batch_size=batch_size//n_splits, num_workers=4)
             sensitive_val = False
         else:
-            val_loader = sensitive_val_loader
+            val_loader = DataLoader(sensitive_val_loader.dataset, shuffle=False, batch_size=batch_size//n_splits)
             sensitive_val = True
             val_acc_list = []
 
@@ -329,6 +433,7 @@ class Evaluator(object):
                     if len(targets.shape) == 2:
                         inputs = inputs.to(torch.float32)
                         targets = torch.argmax(targets, dim=1)
+                    print(inputs.shape)
                     inputs, targets = inputs.to(self.device) * 2. - 1., targets.to(self.device)
                     outputs = model(inputs)
                     loss = criterion(outputs, targets) / n_splits

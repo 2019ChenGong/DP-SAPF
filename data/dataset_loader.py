@@ -18,6 +18,32 @@ from models.PrivImage import resnet
 from models.PrivImage.classifer_trainer import train_classifier
 
 import random
+
+class MemmapDataset(Dataset):
+    def __init__(self, img_path, label_path, c=3, size=32, num_classes=10, indices=None):
+        self.images = np.load(img_path, mmap_mode='r')
+        self.labels = np.load(label_path, mmap_mode='r')
+        self.indices = indices if indices is not None else np.arange(len(self.images))
+        self.c = c
+        self.size = size
+        self.num_classes = num_classes
+
+    def __getitem__(self, idx):
+        real_idx = self.indices[idx]
+        img = self.images[real_idx].copy()
+        label = int(self.labels[real_idx])
+        img_tensor = torch.from_numpy(img).float()
+        if img_tensor.shape[-1] != self.size:
+            img_tensor = F.interpolate(img_tensor.unsqueeze(0), size=[self.size, self.size])[0]
+
+        # If the images are in color but only one channel is expected, convert to grayscale.
+        if img_tensor.shape[0] == 3 and self.c == 1:
+            img_tensor = 0.299 * img_tensor[2:, ...] + 0.587 * img_tensor[1:2, ...] + 0.114 * img_tensor[:1, ...]
+        return img_tensor, torch.tensor(label, dtype=torch.long)
+
+    def __len__(self):
+        return len(self.indices)
+    
 class random_aug(object):
     def __init__(self, magnitude, num_ops):
         self.mag = magnitude
