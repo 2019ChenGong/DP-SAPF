@@ -11,7 +11,7 @@ from fld.features.InceptionFeatureExtractor import InceptionFeatureExtractor
 from fld.metrics.FLD import FLD
 from fld.metrics.PrecisionRecall import PrecisionRecall
 from fld.metrics.FID import FID
-import ImageReward as RM
+# import ImageReward as RM
 
 
 import torch
@@ -175,6 +175,7 @@ class Evaluator(object):
 
         # Determine the number of unique classes in the synthetic labels.
         num_classes = len(set(synthetic_labels))
+        del gen_images, synthetic_images
 
         # Load the image reward model.
         # rm_model = RM.load("ImageReward-v1.0")

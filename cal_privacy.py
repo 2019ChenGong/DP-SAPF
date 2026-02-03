@@ -95,7 +95,7 @@ def main(config):
     sensitive_train_loader, _, _, _, config = load_data(config)
     accountant = RDPAccountant()
 
-    sigma_s = 5
+    sigma_s = 25
     accountant.history = [(sigma_s, min(50000/len(sensitive_train_loader.dataset), 1.), 1)]
     sample_rate = 4096 / len(sensitive_train_loader.dataset)
     sigma_sgd = get_noise_multiplier(

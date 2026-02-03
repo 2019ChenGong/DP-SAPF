@@ -1,0 +1,17 @@
+diffusers==0.21.0
+accelerate>=0.16.0
+torchvision
+transformers>=4.25.1
+ftfy
+tensorboard
+Jinja2
+bitsandbytes>=0.40.0
+xformers>=0.0.20
+regex 
+tqdm
+scipy
+pandas
+accelerator
+git+https://github.com/openai/CLIP.git
+opacus
+datasets
