@@ -9,7 +9,7 @@ This is the official implementation of paper
 
 ### Writing
 
-- Appendix C.5 Hyper-parameter Settings of DP-SAPF
+- README.md 
 
 ### Experiments
 
