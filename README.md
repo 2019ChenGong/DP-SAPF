@@ -45,7 +45,7 @@ bash data_preparation.sh
 ### 3.3 Training
 Run:
 ```
-scripts/script-dp-sapf.sh
+bash scripts/script-dp-sapf.sh
 ```
 
 After training, the synthetic images will be saved in `exp/lora_cifar10_32_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/gen`.
