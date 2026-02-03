@@ -211,17 +211,6 @@ if __name__ == "__main__":
     prompt_list = get_prompt(args.data_name)
     prompts = [[prompt, idx] for idx, prompt in enumerate(prompt_list)]
     prompts = prompts * (args.num // len(prompt_list))
-    # ds = PEDESDataset()
-    # print(len(ds))
-    # prompts = [example['text'] for example in ds.ds]
-
-    # ds = Flickr30kDataset(image_dir='/bigtemp/fzv6en/kecen/flickr/', json_path='/bigtemp/fzv6en/kecen/dataset_flickr30k.json', split='train')
-    # prompts = [example['text'] for example in ds.data]
-
-    # ds = RocoDataset(max_images=None)
-    # prompts = [[example['caption']] for example in ds.ds]
-
-    # prompts = [["A man wearing a blue t-shirt, a pair of white and black shorts, a red hat and a bag over his left shoulder"]] * 10
     args.checkpoint_path = args.output_dir
     generator_from_prompt_list_multigpu(
         model_id=args.model_id,
