@@ -64,13 +64,18 @@ The FID and Acc on the testset will be saved into `exp/lora_cifar10_32_4096bs_1k
 
 ### Writing
 
-- Motivation
+- Figure 2 bar space;
+
+- Figure 1 celeba, 2 x 8; Figure 1 add black line;
+
+- 4 * 1; cifar fid acc, celeba fid acc, cifar10 select ratio fid acc, celeba select ratio fid acc; referring to zheng's paper, recoding the best value in figures.
+
 
 ### Experiments
 
 - Table 6 epsilon = \infty
 
-- Hyper-parameter analysis: $\epsilon = \{0.2, 1.0, 5.0, 10, 15, 20\}$ for cifar10, celeba, SD-v1-5;  Selection ratio $ p = \{0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8\}$ for cifar10, celeba, SD-v1-5.
+- Hyper-parameter analysis: $\epsilon = \{0.2, 1.0, 5.0, 10, 15, 20\}$ for cifar10, celeba, SD-v1-5;  Selection ratio $ c = \{0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8\}$ for cifar10, celeba, SD-v1-5.
 
 - Abalation studies in Table 5.
 
