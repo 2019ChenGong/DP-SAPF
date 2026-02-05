@@ -64,11 +64,10 @@ The FID and Acc on the testset will be saved into `exp/lora_cifar10_32_4096bs_1k
 
 ### Writing
 
-- Figure 2 bar space;
-
-- Figure 1 celeba, 2 x 8; Figure 1 add black line;
 
 - 4 * 1; cifar fid acc, celeba fid acc, cifar10 select ratio fid acc, celeba select ratio fid acc; referring to zheng's paper, recoding the best value in figures.
+
+- Parameter Selection Table
 
 
 ### Experiments
