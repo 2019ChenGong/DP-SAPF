@@ -42,6 +42,31 @@ Preprocess dataset.
 bash data_preparation.sh
 ```
 
+After running, we can find the folder `dataset`:
+
+  ```plaintext
+dataset/                                  
+├── camelyon/       
+├── celeba/ 
+├── cifar10/ 
+...
+```
+
+We list the studied datasets as follows in our paper, which include four sensitive datasets.
+  | Usage |  Dataset  |
+  | ------- | --------------------- |
+  | Sensitive dataset | CIFAR-10, OCTMNIST, CelebA, Camelyon |
+
+
+We list the studied public models as follows in our paper, which include four public models.
+  | Usage |  Dataset  |
+  | ------- | --------------------- |
+  | Sensitive dataset | Stable-Diffusion-v1-5, Stable-Diffusion-2-1-base, Realistic-v6, Prompt2med |
+
+The public models will be downloaded automatically when runing the training codes as follows.
+
+
+
 ### 3.3 Training
 Run:
 ```
@@ -49,6 +74,8 @@ bash scripts/script-dp-sapf.sh
 ```
 
 After training, the synthetic images will be saved in `exp/lora_cifar10_32_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/gen`.
+
+To evaluate DP-SAPF on other sensitive datasets, please edit dataset name and dataset folder in line 4-5 in `scripts/script-dp-sapf.sh`.
 
 ### 3.4 Evaluation
 
@@ -65,10 +92,6 @@ The FID and Acc on the testset will be saved into `exp/lora_cifar10_32_4096bs_1k
 ### Writing
 
 
-- 4 * 1; cifar fid acc, celeba fid acc, cifar10 select ratio fid acc, celeba select ratio fid acc; referring to zheng's paper, recoding the best value in figures.
-
-- Parameter Selection Table
-
 
 ### Experiments
 
@@ -77,8 +100,6 @@ The FID and Acc on the testset will be saved into `exp/lora_cifar10_32_4096bs_1k
 - Hyper-parameter analysis: $\epsilon = \{0.2, 1.0, 5.0, 10, 15, 20\}$ for cifar10, celeba, SD-v1-5;  Selection ratio $ c = \{0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8\}$ for cifar10, celeba, SD-v1-5.
 
 - Abalation studies in Table 5.
-
-- visulization
 
 
 ## Acknowledgement
