@@ -75,7 +75,9 @@ bash scripts/script-dp-sapf.sh
 
 After training, the synthetic images will be saved in `exp/lora_cifar10_32_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/gen`.
 
-To evaluate DP-SAPF on other sensitive datasets, please edit dataset name and dataset folder in line 4-5 in `scripts/script-dp-sapf.sh`.
+To evaluate DP-SAPF on other sensitive datasets, please edit dataset name and dataset folder in line 4-5 in `scripts/script-dp-sapf.sh`. The dataset folder can be found in `/dataset`.
+
+Users can also edit `MODEL_NAME="stable-diffusion-v1-5/stable-diffusion-v1-5"` in line 14 for other public models.
 
 ### 3.4 Evaluation
 
