@@ -29,7 +29,7 @@ We provide an example for how to reproduce the results on CIFAR-10 in our paper.
 
 To set up the environment of DP-SAPF, we use `conda` to manage our dependencies. 
 
-Run the following commands to install the environments for training and evaluation:
+Please run the following commands to install the environments for training and evaluation:
  ```
 bash install.sh
 bash install_lora.sh
@@ -68,7 +68,7 @@ The public models will be downloaded automatically when runing the training code
 
 
 ### 3.3 Training
-Run:
+Please run:
 ```
 bash scripts/script-dp-sapf.sh
 ```
@@ -81,7 +81,7 @@ Users can also edit `MODEL_NAME="stable-diffusion-v1-5/stable-diffusion-v1-5"` i
 
 ### 3.4 Evaluation
 
-Run:
+Please run:
 ```
 conda activate dpimagebench
 python eval.py -dn cifar10_32 -ep exp/lora_cifar10_32_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/gen
