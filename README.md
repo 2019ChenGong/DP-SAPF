@@ -29,7 +29,7 @@ We provide an example for how to reproduce the results on CIFAR-10 in our paper.
 
 To set up the environment of DP-SAPF, we use `conda` to manage our dependencies. 
 
-Run the following commands to install the environments for training and evaluation:
+Please run the following commands to install the environments for training and evaluation:
  ```
 bash install.sh
 bash install_lora.sh
@@ -68,7 +68,7 @@ The public models will be downloaded automatically when runing the training code
 
 
 ### 3.3 Training
-Run:
+Please run:
 ```
 bash scripts/script-dp-sapf.sh
 ```
@@ -77,16 +77,31 @@ After training, the synthetic images will be saved in `exp/lora_cifar10_32_4096b
 
 To evaluate DP-SAPF on other sensitive datasets, please edit dataset name and dataset folder in line 4-5 in `scripts/script-dp-sapf.sh`. The dataset folder can be found in `/dataset`.
 
-Users can also edit `MODEL_NAME="stable-diffusion-v1-5/stable-diffusion-v1-5"` in line 14 for other public models.
+For baselines PE, DP-Finetune, DP-LoRA, and DP-LDM, please run:
+
+```
+bash scripts/script-pe.sh
+bash scripts/script-dp-finetune.sh
+bash scripts/script-dp-lora.sh
+bash scripts/script-dp-ldm.sh
+```
+
+Users can also edit `MODEL_NAME="stable-diffusion-v1-5/stable-diffusion-v1-5"` in each script for other public models.
 
 ### 3.4 Evaluation
 
-Run:
+Please run:
 ```
 conda activate dpimagebench
 python eval.py -dn cifar10_32 -ep exp/lora_cifar10_32_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/gen
 ```
 The FID and Acc on the testset will be saved into `exp/lora_cifar10_32_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/stdout.txt`.
+
+For baselines, you just need to change `-ep` into their output like
+```
+conda activate dpimagebench
+python eval.py -dn cifar10_32 -ep <output-dir>
+```
 
 
 ## Todo list
