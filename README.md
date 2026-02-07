@@ -103,7 +103,7 @@ python eval.py -dn cifar10_32 -ep exp/lora_cifar10_32_4096bs_1ksteps_eps10/lora_
 ```
 The FID and Acc on the testset will be saved into `exp/lora_cifar10_32_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/stdout.txt`.
 
-For baselines, you just need to change `-ep` into their output like
+For baselines, you just need to change `-ep` into the corresponding output directory like
 ```
 conda activate dpimagebench
 python eval.py -dn cifar10_32 -ep <output-dir>
