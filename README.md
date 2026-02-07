@@ -86,7 +86,13 @@ bash scripts/script-dp-lora.sh
 bash scripts/script-dp-ldm.sh
 ```
 
-Users can also edit `MODEL_NAME="stable-diffusion-v1-5/stable-diffusion-v1-5"` in each script for other public models.
+Users can also edit `MODEL_NAME="stable-diffusion-v1-5/stable-diffusion-v1-5"` in each script for other public models. The following three public models are used in our experiments:
+```
+Manojb/stable-diffusion-2-1-base
+Nihirc/Prompt2MedImage
+SG161222/Realistic_Vision_V6.0_B1_noVAE
+```
+
 
 ### 3.4 Evaluation
 
