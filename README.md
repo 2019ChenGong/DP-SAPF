@@ -59,9 +59,9 @@ We list the studied datasets as follows in our paper, which include four sensiti
 
 
 We list the studied public models as follows in our paper, which include four public models.
-  | Usage |  Dataset  |
+  | Usage |  Model Name  |
   | ------- | --------------------- |
-  | Sensitive dataset | Stable-Diffusion-v1-5, Stable-Diffusion-2-1-base, Realistic-v6, Prompt2med |
+  | Public Model | Stable-Diffusion-v1-5, Stable-Diffusion-2-1-base, Realistic-v6, Prompt2med |
 
 The public models will be downloaded automatically when runing the training codes as follows.
 
