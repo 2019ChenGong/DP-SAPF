@@ -168,6 +168,61 @@ def struct_output(args, accelerator):
     if accelerator.is_main_process:
         if(os.path.exists(args.output_dir)): pass
         else: os.mkdir(args.output_dir)
+    
+    
+    if(args.adapter_type=="lora"):
+        # Now create folder for experiments
+        attn_config = ''
+        if "k" in args.attn_update_unet: attn_config = attn_config + "k" + str(args.unet_lora_rank_k)
+        if "q" in args.attn_update_unet: attn_config = attn_config + "q" + str(args.unet_lora_rank_q)
+        if "v" in args.attn_update_unet: attn_config = attn_config + "v" + str(args.unet_lora_rank_v)
+        if "o" in args.attn_update_unet: attn_config = attn_config + "o" + str(args.unet_lora_rank_out)
+        if(args.unet_tune_mlp): attn_config = attn_config + "f" + str(args.unet_lora_rank_mlp)
+        exp = f"lora_{attn_config}_{args.diffusion_model}_{args.learning_rate}"
+
+        if args.attn_keywords != 'attn' and not args.attn_keywords.endswith('json'):
+            exp += f'_{args.attn_keywords}'
+
+        if(args.train_text_encoder):
+            text_attn_config = ''
+            if "k" in args.attn_update_text: text_attn_config = text_attn_config + "k" + str(args.text_lora_rank_k)
+            if "q" in args.attn_update_text: text_attn_config = text_attn_config + "q" + str(args.text_lora_rank_q)
+            if "v" in args.attn_update_text: text_attn_config = text_attn_config + "v" + str(args.text_lora_rank_v)
+            if "o" in args.attn_update_text: text_attn_config = text_attn_config + "o" + str(args.text_lora_rank_out)
+            if(args.text_tune_mlp): text_attn_config = text_attn_config + "f" + str(args.text_lora_rank_mlp)
+            attn_config = attn_config + "_" + text_attn_config
+            exp = f"lora_{attn_config}_{args.diffusion_model}_{args.learning_rate}_{args.learning_rate_text}"
+    
+    elif(args.adapter_type=="krona"):
+        # Now create folder for experiments
+        attn_config = ""
+        if "k" in args.attn_update_unet: 
+            attn_config = attn_config + "k" + str(args.krona_unet_k_rank_a1) + ":" + str(args.krona_unet_k_rank_a2)
+        if "q" in args.attn_update_unet: 
+            attn_config = attn_config + "q" + str(args.krona_unet_q_rank_a1) + ":" + str(args.krona_unet_q_rank_a2)
+        if "v" in args.attn_update_unet: 
+            attn_config = attn_config + "v" + str(args.krona_unet_v_rank_a1) + ":" + str(args.krona_unet_v_rank_a2)
+        if "o" in args.attn_update_unet: 
+            attn_config = attn_config + "o" + str(args.krona_unet_o_rank_a1) + ":" + str(args.krona_unet_o_rank_a2)
+        if(args.unet_tune_mlp): 
+            attn_config = attn_config + "f" + str(args.krona_unet_ffn_rank_a1) + ":" + str(args.krona_unet_ffn_rank_a2)
+        exp = f"krona_{attn_config}_{args.diffusion_model}_{args.learning_rate}"
+        
+        if(args.train_text_encoder):
+            text_attn_config = ''
+            if "k" in args.attn_update_text: 
+                text_attn_config = text_attn_config + "k" + str(args.krona_text_k_rank_a1) + ":" + str(args.krona_text_k_rank_a2)
+            if "q" in args.attn_update_text: 
+                text_attn_config = text_attn_config + "q" + str(args.krona_text_q_rank_a1) + ":" + str(args.krona_text_q_rank_a2)
+            if "v" in args.attn_update_text: 
+                text_attn_config = text_attn_config + "v" + str(args.krona_text_v_rank_a1) + ":" + str(args.krona_text_v_rank_a2)
+            if "o" in args.attn_update_text: 
+                text_attn_config = text_attn_config + "o" + str(args.krona_text_o_rank_a1) + ":" + str(args.krona_text_o_rank_a2)
+            if(args.text_tune_mlp): 
+                text_attn_config = text_attn_config + "f" + str(args.krona_text_ffn_rank_a1) + ":" + str(args.krona_text_ffn_rank_a2)    
+            attn_config = attn_config + "_" + text_attn_config
+            exp = f"krona_{attn_config}_{args.diffusion_model}_{args.learning_rate}_{args.learning_rate_text}"
+    else: raise AttributeError(f"{args.adapter_type} wrong adapter format.")
 
     exp = f"{args.diffusion_model}"
 
@@ -762,6 +817,13 @@ def parse_args(input_args=None):
         help="Details about attention matrix (k, q, v, o)",
     )
 
+    parser.add_argument(
+        "--remove_attn_keywords",
+        type=str,
+        default=None,
+        help="Details about attention matrix (k, q, v, o)",
+    )
+
     parser.add_argument("--delete_and_upload_drive", 
         action="store_true", 
         help="Whether or not to push the model to the GDrive.",
@@ -780,17 +842,27 @@ def parse_args(input_args=None):
     )
 
     parser.add_argument(
+        "--fisher_num",
+        type=int,
+        default=1,
+        help="Details about attention matrix (k, q, v, o)",
+    )
+
+    parser.add_argument(
         "--fisher_sigma",
         type=float,
         default=None,
         help="Details about attention matrix (k, q, v, o)",
     )
 
-    parser.add_argument("--unet_tune_mlp",
-        action="store_true",
-        help="Whether we are finetuning MLP layers as well.",
+    parser.add_argument(
+        "--pretrain_model",
+        type=str,
+        default=None,
+        help="Details about attention matrix (k, q, v, o)",
     )
-    parser.add_argument("--attn_only",
+
+    parser.add_argument("--unet_tune_mlp",
         action="store_true",
         help="Whether we are finetuning MLP layers as well.",
     )
@@ -989,55 +1061,16 @@ def main(args):
         args.pretrained_model_name_or_path, subfolder="unet", revision=args.revision
     )
 
+    if args.pretrain_model is not None:
+        lora_state_dict, network_alphas = LoraLoaderMixin.lora_state_dict(args.pretrain_model)
+        LoraLoaderMixin.load_lora_into_unet(lora_state_dict, network_alphas=network_alphas, unet=unet)
+        unet.fuse_lora()
+
     # We only train the additional adapter LoRA layers
     if vae is not None:
         vae.requires_grad_(False)
     text_encoder.requires_grad_(False)
     unet.requires_grad_(False)
-
-    import json
-    if args.attn_keywords.endswith('json'):
-        with open(os.path.join(args.output_dir, args.attn_keywords), "r") as f:
-            args.attn_keywords = json.load(f)
-    else:
-        args.attn_keywords = None
-
-    def freeze_non_linear_layers(model, attn_only=False):
-        from diffusers.models.lora import LoRACompatibleLinear
-
-        if args.attn_keywords is not None:
-            for name, module in model.named_modules():
-                if 'attn' in name and 'to' in name:
-                    new_name = name.split('.to')[0] + '.processor'
-                    new_value = name.split('.to')[1][1]
-                    if type(args.attn_keywords) == dict and new_name in args.attn_keywords and type(args.attn_keywords[new_name]) == list:
-                        if new_value in args.attn_keywords[new_name]:
-                            for param in module.parameters():
-                                param.requires_grad = True
-        elif attn_only:
-            # Only unfreeze Linear layers inside attention blocks (to_q, to_k, to_v, to_out)
-            def _unfreeze_attn_linears(module_name, module):
-                if isinstance(module, (torch.nn.Linear, LoRACompatibleLinear)):
-                    # Check if this linear is part of attention projection
-                    if any(kw in module_name for kw in ['to_q', 'to_k', 'to_v', 'to_out']):
-                        for param in module.parameters():
-                            param.requires_grad = True
-
-            # Recursively apply with module names
-            for name, module in model.named_modules():
-                _unfreeze_attn_linears(name, module)
-        else:
-            # Unfreeze all Linear and LoRACompatibleLinear layers
-            unet.requires_grad_(True)
-            # for module in model.modules():
-            #     if accelerator.is_main_process:
-            #         print(module, isinstance(module, (torch.nn.Conv2d, torch.nn.Linear, LoRACompatibleLinear)))
-            #     if isinstance(module, (torch.nn.Conv2d, torch.nn.Linear, LoRACompatibleLinear)):
-            #         for param in module.parameters():
-            #             param.requires_grad = True
-
-    freeze_non_linear_layers(unet, args.attn_only)
-    # unet.requires_grad_(False)
 
     # For mixed precision training we cast all non-trainable weigths (vae, non-lora text_encoder and non-lora unet) to half-precision
     # as these weights are only used for inference, keeping weights in full precision is not required.
@@ -1071,6 +1104,122 @@ def main(args):
         if args.train_text_encoder:
             text_encoder.gradient_checkpointing_enable()
     
+    import json
+    if args.attn_keywords.endswith('json'):
+        with open(os.path.join(args.output_dir, args.attn_keywords), "r") as f:
+            args.attn_keywords = json.load(f)
+
+    # Set correct lora layers
+    def noise_non_linear_layers(model):
+
+        for name, module in model.named_modules():
+            if 'attn' in name and 'to' in name:
+                new_name = name.split('.to')[0] + '.processor'
+                new_value = name.split('.to')[1][1]
+                if type(args.attn_keywords) == dict and new_name in args.attn_keywords and type(args.attn_keywords[new_name]) == list:
+                    if new_value in args.attn_keywords[new_name]:
+                        for param in module.parameters():
+                            param.data.normal_(mean=0.0, std=0.02)
+
+    noise_non_linear_layers(unet)
+
+    unet_lora_attn_procs = {}
+    unet_lora_parameters = []
+    for name, attn_processor in unet.attn_processors.items():
+        cross_attention_dim = None if name.endswith("attn1.processor") else unet.config.cross_attention_dim
+        if name.startswith("mid_block"):
+            hidden_size = unet.config.block_out_channels[-1]
+        elif name.startswith("up_blocks"):
+            block_id = int(name[len("up_blocks.")])
+            hidden_size = list(reversed(unet.config.block_out_channels))[block_id]
+        elif name.startswith("down_blocks"):
+            block_id = int(name[len("down_blocks.")])
+            hidden_size = unet.config.block_out_channels[block_id]
+
+        if isinstance(attn_processor, (AttnAddedKVProcessor, SlicedAttnAddedKVProcessor, AttnAddedKVProcessor2_0)):
+            lora_attn_processor_class = LoRAAttnAddedKVProcessor
+            print("xxxxxxxxxxx")
+        else:
+            # print(hasattr(F, "scaled_dot_product_attention"))
+            lora_attn_processor_class = (
+                LoRAAttnProcessor2_0 if hasattr(F, "scaled_dot_product_attention") else LoRAAttnProcessor
+            )
+        
+        if(args.adapter_type=="lora"):
+            if type(args.attn_keywords) == dict and name in args.attn_keywords and type(args.attn_keywords[name]) == list:
+                attn_update_unet = args.attn_keywords[name]
+                module = lora_attn_processor_class(
+                    hidden_size=hidden_size, 
+                    cross_attention_dim=cross_attention_dim, 
+                    adapter_type=args.adapter_type, # added 
+                    attn_update_unet=attn_update_unet, # added 
+                    k_rank=args.unet_lora_rank_k if "k" in args.attn_update_unet else None, # k rank
+                    q_rank=args.unet_lora_rank_q if "q" in args.attn_update_unet else None, # added 
+                    v_rank=args.unet_lora_rank_v if "v" in args.attn_update_unet else None, # added 
+                    out_rank=args.unet_lora_rank_out if "o" in args.attn_update_unet else None, # added 
+                )
+            else:
+                module = lora_attn_processor_class(
+                    hidden_size=hidden_size, 
+                    cross_attention_dim=cross_attention_dim, 
+                    adapter_type=args.adapter_type, # added 
+                    attn_update_unet=args.attn_update_unet, # added 
+                    k_rank=args.unet_lora_rank_k if "k" in args.attn_update_unet else None, # k rank
+                    q_rank=args.unet_lora_rank_q if "q" in args.attn_update_unet else None, # added 
+                    v_rank=args.unet_lora_rank_v if "v" in args.attn_update_unet else None, # added 
+                    out_rank=args.unet_lora_rank_out if "o" in args.attn_update_unet else None, # added 
+                )
+        else:
+            raise AttributeError(f"{args.adapter_type} is not supported.")
+        if type(args.attn_keywords) == str:
+            if args.attn_keywords in name and (args.remove_attn_keywords is None or args.remove_attn_keywords not in name):
+                unet_lora_parameters.extend(module.parameters())
+                if accelerator.is_main_process:
+                    print(args.attn_keywords, name)
+            else:
+                module.requires_grad_(False)
+        elif type(args.attn_keywords) == dict:
+            if name in args.attn_keywords and (args.remove_attn_keywords is None or args.remove_attn_keywords not in name):
+                if accelerator.is_main_process:
+                    print('-', name)
+                unet_lora_parameters.extend(module.parameters())
+            else:
+                module.requires_grad_(False)
+        unet_lora_attn_procs[name] = module
+
+    unet.set_attn_processor(unet_lora_attn_procs)
+    if(args.unet_tune_mlp):
+        if args.adapter_type=="lora": lora_mlp_rank=args.unet_lora_rank_mlp
+        elif args.adapter_type=="krona": lora_mlp_rank=(args.krona_unet_ffn_rank_a1, args.krona_unet_ffn_rank_a2)
+        else: raise AttributeError("wrong adapter type")
+        ffn_info, unet_lora_extended_parameters = unet.set_ffn_processors(adapter_type=args.adapter_type,
+            lora_mlp_rank=lora_mlp_rank,
+        )
+        unet_lora_parameters.extend(unet_lora_extended_parameters)
+    
+
+    # The text encoder comes from 🤗 transformers, so we cannot directly modify it.
+    # So, instead, we monkey-patch the forward calls of its attention-blocks.
+    if args.train_text_encoder:
+        # ensure that dtype is float32, even if rest of the model that isn't trained is loaded in fp16    
+        if args.adapter_type=="lora":
+            text_lora_parameters = LoraLoaderMixin._modify_text_encoder(
+                text_encoder, dtype=torch.float32, adapter_type=args.adapter_type, attn_update_text=args.attn_update_text,
+                rank_k=args.text_lora_rank_k if "k" in args.attn_update_text else None, # added 
+                rank_q=args.text_lora_rank_q if "q" in args.attn_update_text else None, # added
+                rank_v=args.text_lora_rank_v if "v" in args.attn_update_text else None, # added 
+                rank_o=args.text_lora_rank_out if "o" in args.attn_update_text else None, # added
+                rank_mlp=args.text_lora_rank_mlp if args.text_tune_mlp else None, # added
+                patch_mlp=args.text_tune_mlp,
+            )
+        elif args.adapter_type=="krona":
+            text_lora_parameters = LoraLoaderMixin._modify_text_encoder(
+                text_encoder, dtype=torch.float32, adapter_type=args.adapter_type, attn_update_text=args.attn_update_text,
+                rank_k=(args.krona_text_k_rank_a1, args.krona_text_k_rank_a2) if "k" in args.attn_update_text else None, # added 
+                rank_q=(args.krona_text_q_rank_a1, args.krona_text_q_rank_a2) if "q" in args.attn_update_text else None, # added
+                rank_v=(args.krona_text_v_rank_a1, args.krona_text_v_rank_a2) if "v" in args.attn_update_text else None, # added 
+                rank_o=(args.krona_text_o_rank_a1, args.krona_text_o_rank_a2) if "o" in args.attn_update_text else None, # added
+            )
 
     # create custom saving & loading hooks so that `accelerator.save_state(...)` serializes in a nice format
     def save_model_hook(models, weights, output_dir):
@@ -1157,6 +1306,29 @@ def main(args):
         else args.learning_rate_text
     )
 
+    params_to_optimize = (
+        [
+            {
+                "params": itertools.chain(unet_lora_parameters), 
+                "lr": args.learning_rate
+            },
+            {
+                "params": itertools.chain(text_lora_parameters),
+                "lr": text_lr,
+            },
+        ]
+        if args.train_text_encoder
+        else itertools.chain(unet_lora_parameters)
+    )
+
+    optimizer = optimizer_class(
+        params_to_optimize,
+        lr=args.learning_rate,
+        betas=(args.adam_beta1, args.adam_beta2),
+        weight_decay=args.adam_weight_decay,
+        eps=args.adam_epsilon,
+    )
+
     if args.instance_prompt != '':
         args.validation_prompt = args.instance_prompt
 
@@ -1180,7 +1352,6 @@ def main(args):
         }
 
         return batch
-
     train_dataset = BenchDataset(
         name=args.instance_data_dir,
         path=args.bench_path,
@@ -1201,6 +1372,15 @@ def main(args):
     total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
     args.num_train_epochs = math.ceil(args.max_train_steps / num_update_steps_per_epoch)
 
+    lr_scheduler = get_scheduler(
+        args.lr_scheduler,
+        optimizer=optimizer,
+        num_warmup_steps=args.lr_warmup_steps,
+        num_training_steps=args.max_train_steps,
+        num_cycles=args.lr_num_cycles,
+        power=args.lr_power,
+    )
+
     if args.eps is not None:
         privacy_engine = PrivacyEngine_Distributed_extending(
             unet,
@@ -1219,61 +1399,11 @@ def main(args):
             torch_seed_is_fixed=True,
             micro_batch_size=args.micro_batch_size,
         )
-        # privacy_engine = PrivacyEngine(
-        #     unet,
-        #     batch_size=total_batch_size,
-        #     sample_size=sample_num,
-        #     num_steps=args.max_train_steps,
-        #     target_epsilon=args.eps,
-        #     clipping_fn='automatic',
-        #     clipping_mode='MixOpt',
-        #     origin_params=None,
-        #     clipping_style='all-layer',
-        #     # num_GPUs=accelerator.num_processes,
-        #     # torch_seed_is_fixed=True,
-        # )
-        # attaching to optimizers is not needed for multi-GPU distributed learning
         if accelerator.num_processes == 1:
             privacy_engine.attach(optimizer)
-        privacy_engine.noise_multiplier = get_noise_multiplier(target_epsilon=args.eps, target_delta=1/(len(train_dataset) * np.log(len(train_dataset))), sample_rate=total_batch_size/len(train_dataset), steps=args.total_steps, accountant="prv", account_history=None if args.fisher_batch_size is None else [(args.fisher_sigma, min(args.fisher_batch_size/len(train_dataset), 1.0), 1)])
+        privacy_engine.noise_multiplier = get_noise_multiplier(target_epsilon=args.eps, target_delta=1/(len(train_dataset) * np.log(len(train_dataset))), sample_rate=total_batch_size/len(train_dataset), steps=args.total_steps, accountant="prv", account_history=None if args.fisher_batch_size is None else [(args.fisher_sigma, min(args.fisher_batch_size/len(train_dataset), 1.0), args.fisher_num)])
         if accelerator.is_main_process:
             logger.info(f"Noise injected: {privacy_engine.noise_multiplier} --> averaged by batch size: {privacy_engine.effective_noise_multiplier}")
-    
-    unet_param = []
-    for param in unet.parameters():
-        if param.requires_grad:
-            unet_param.append(param)
-    params_to_optimize = (
-        [
-            {
-                "params": itertools.chain(unet_param), 
-                "lr": args.learning_rate
-            },
-            {
-                "params": itertools.chain(text_encoder.parameters()),
-                "lr": text_lr,
-            },
-        ]
-        if args.train_text_encoder
-        else itertools.chain(unet_param)
-    )
-
-    optimizer = optimizer_class(
-        params_to_optimize,
-        lr=args.learning_rate,
-        betas=(args.adam_beta1, args.adam_beta2),
-        weight_decay=args.adam_weight_decay,
-        eps=args.adam_epsilon,
-    )
-
-    lr_scheduler = get_scheduler(
-        args.lr_scheduler,
-        optimizer=optimizer,
-        num_warmup_steps=args.lr_warmup_steps,
-        num_training_steps=args.max_train_steps,
-        num_cycles=args.lr_num_cycles,
-        power=args.lr_power,
-    )
 
     # Prepare everything with our `accelerator`.
     if args.train_text_encoder:
@@ -1410,9 +1540,9 @@ def main(args):
                     #     else unet_lora_parameters
                     # )
                     # accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
-                                          
+
                     def get_params():
-                        return itertools.chain(unet_param, text_encoder.parameters()) if args.train_text_encoder else unet_param
+                        return itertools.chain(unet_lora_parameters, text_lora_parameters) if args.train_text_encoder else unet_lora_parameters
                     if args.eps is not None:
                         cos_sims = []
                         for param in get_params():
@@ -1460,7 +1590,24 @@ def main(args):
     if accelerator.is_main_process:
         unet = accelerator.unwrap_model(unet)
         unet = unet.to(torch.float32)
-        torch.save(unet.state_dict(), os.path.join(args.output_dir, 'model.pth')) 
+        unet_lora_layers = unet_attn_processors_state_dict(unet)
+
+        if(args.unet_tune_mlp): 
+            unet_lora_layers_ffn = unet_ffn_within_attn_processors_state_dict(unet)
+            unet_lora_layers.update(unet_lora_layers_ffn)
+        
+        if text_encoder is not None and args.train_text_encoder:
+            text_encoder = accelerator.unwrap_model(text_encoder)
+            text_encoder = text_encoder.to(torch.float32)
+            text_encoder_lora_layers = text_encoder_lora_state_dict(text_encoder, attn_update_text=args.attn_update_text)
+        else:
+            text_encoder_lora_layers = None
+
+        LoraLoaderMixin.save_lora_weights(
+            save_directory=args.output_dir,
+            unet_lora_layers=unet_lora_layers,
+            text_encoder_lora_layers=text_encoder_lora_layers,
+        )
 
 
     accelerator.end_training()

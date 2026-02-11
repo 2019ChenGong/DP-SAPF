@@ -175,7 +175,9 @@ def generator_from_prompt_list_multigpu(
     for x, y in dataloader:
         x = x.numpy()
         y = y.numpy()
-        np.savez(os.path.join(args.output_dir, 'gen', 'gen'), x=x, y=y)
+        # np.savez(os.path.join(args.output_dir, 'gen', 'gen'), x=x, y=y)
+        np.save(os.path.join(args.output_dir, "gen", "syn_images.npy"), x)
+        np.save(os.path.join(args.output_dir, "gen", "syn_labels.npy"), y)
         break
     
     show_images = []

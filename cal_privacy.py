@@ -95,7 +95,7 @@ def main(config):
     sensitive_train_loader, _, _, _, config = load_data(config)
     accountant = RDPAccountant()
 
-    sigma_s = 25
+    sigma_s = config.train.selection_sigma
     accountant.history = [(sigma_s, min(50000/len(sensitive_train_loader.dataset), 1.), 1)]
     sample_rate = 4096 / len(sensitive_train_loader.dataset)
     sigma_sgd = get_noise_multiplier(
@@ -116,7 +116,7 @@ if __name__ == '__main__':
     parser.add_argument('--config_dir', default="configs")
     parser.add_argument('--method', '-m', default="PE")
     parser.add_argument('--epsilon', '-e', default="10.0")
-    parser.add_argument('--data_name', '-dn', default="mnist_28")
+    parser.add_argument('--data_name', '-dn', default="celeba_male_32")
     parser.add_argument('--exp_description', '-ed', default="")
     parser.add_argument('--resume_exp', '-re', default=None)
     parser.add_argument('--config_suffix', '-cs', default="")

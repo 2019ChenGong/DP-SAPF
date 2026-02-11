@@ -584,6 +584,8 @@ def struct_output(args, accelerator):
             exp = f"krona_{attn_config}_{args.diffusion_model}_{args.learning_rate}_{args.learning_rate_text}"
     else: raise AttributeError(f"{args.adapter_type} wrong adapter format.")
 
+    exp = f"{args.diffusion_model}"
+
     exp_ = os.path.join(args.output_dir, exp)
     if accelerator.is_main_process:
         if(os.path.exists(exp_)): pass
@@ -1141,6 +1143,13 @@ def parse_args(input_args=None):
     )
 
     parser.add_argument(
+        "--fisher_save_dir",
+        type=str,
+        default=None,
+        help="Details about attention matrix (k, q, v, o)",
+    )
+
+    parser.add_argument(
         "--fisher_save_name",
         type=str,
         default="tuning_layers.json",
@@ -1583,6 +1592,8 @@ def main(args):
         selected_attn_modules = defaultdict(list)
         for full_key in top_k_fine_grained:
             # Split into base and projection
+            # if 'to_out' in full_key:
+            #     full_key = full_key[:-2]
             parts = full_key.split(".")
             if any(proj in parts[-1] for proj in ["to_q", "to_k", "to_v", "to_out"]):
                 proj_name = parts[-1][3:][:1]
@@ -1595,7 +1606,10 @@ def main(args):
         }
 
         # Step 3: Save as structured JSON
-        save_path = os.path.join(args.output_dir, args.fisher_save_name)
+        if args.fisher_save_dir is None:
+            save_path = os.path.join(args.output_dir, args.fisher_save_name)
+        else:
+            save_path = os.path.join(args.fisher_save_dir, args.fisher_save_name)
         with open(save_path, "w") as f:
             json.dump(selected_attn_modules, f, indent=2)
 

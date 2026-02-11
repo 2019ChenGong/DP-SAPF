@@ -324,7 +324,8 @@ class Evaluator(object):
         # print(0)
 
         # Split the shuffled data into a training set and a validation set.
-        syn_dataset_train_set, syn_dataset_val_set = random_split(syn_dataset, [55000, 5000])
+        syn_dataset_train_set, syn_dataset_val_set = syn_dataset, syn_dataset
+        # syn_dataset_train_set, syn_dataset_val_set = random_split(syn_dataset, [55000, 5000])
         # synthetic_images_train, synthetic_images_val = synthetic_images[:55000], synthetic_images[55000:]
         # synthetic_labels_train, synthetic_labels_val = synthetic_labels[:55000], synthetic_labels[55000:]
     
@@ -346,12 +347,10 @@ class Evaluator(object):
             scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=60, gamma=0.2)
         else:
             batch_size = 256
-            if syn_dataset.size == 64:
-                n_splits = 16
-            elif syn_dataset.size == 96:
-                n_splits = 32
+            if syn_dataset.size == 96:
+                n_splits = 2
             elif syn_dataset.size == 128:
-                n_splits = 64
+                n_splits = 4
             elif syn_dataset.size == 256:
                 n_splits = 8
             else:
@@ -373,12 +372,13 @@ class Evaluator(object):
         ema = ExponentialMovingAverage(model.parameters(), 0.9999)
 
         train_loader = DataLoader(syn_dataset_train_set, shuffle=True, batch_size=batch_size//n_splits, num_workers=4)
+        sensitive_test_loader = DataLoader(sensitive_test_loader.dataset, shuffle=False, batch_size=batch_size//n_splits, num_workers=0)
 
         if sensitive_val_loader is None:
             val_loader = DataLoader(syn_dataset_val_set, shuffle=False, batch_size=batch_size//n_splits, num_workers=4)
             sensitive_val = False
         else:
-            val_loader = DataLoader(sensitive_val_loader.dataset, shuffle=False, batch_size=batch_size//n_splits)
+            val_loader = DataLoader(sensitive_val_loader.dataset, shuffle=False, batch_size=batch_size//n_splits, num_workers=0)
             sensitive_val = True
             val_acc_list = []
 
@@ -433,7 +433,6 @@ class Evaluator(object):
                     if len(targets.shape) == 2:
                         inputs = inputs.to(torch.float32)
                         targets = torch.argmax(targets, dim=1)
-                    print(inputs.shape)
                     inputs, targets = inputs.to(self.device) * 2. - 1., targets.to(self.device)
                     outputs = model(inputs)
                     loss = criterion(outputs, targets) / n_splits

@@ -106,3 +106,9 @@ metric_dpfid_test.py
 metric_test.py
 test_scripts.sh
 run_metric.py
+
+dataset_*
+
+real_dataset_*
+
+table.tex

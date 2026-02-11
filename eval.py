@@ -30,8 +30,8 @@ def main(config):
     syn_dataset = MemmapDataset(os.path.join(config.gen.log_dir[:-7], "syn_images.npy"), os.path.join(config.gen.log_dir[:-7], "syn_labels.npy"), c=config.sensitive_data.num_channels, size=config.sensitive_data.resolution, num_classes=config.sensitive_data.n_classes)
     evaluator = Evaluator(config)
     
-    evaluator.eval(syn_dataset, sensitive_train_loader, sensitive_val_loader, sensitive_test_loader)
-    # evaluator.eval_fidelity(syn_dataset, sensitive_train_loader, sensitive_val_loader, sensitive_test_loader)
+    # evaluator.eval(syn_dataset, sensitive_train_loader, sensitive_val_loader, sensitive_test_loader)
+    evaluator.eval_fidelity(syn_dataset, sensitive_train_loader, sensitive_val_loader, sensitive_test_loader)
 
 
 if __name__ == '__main__':

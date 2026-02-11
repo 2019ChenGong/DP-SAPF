@@ -224,6 +224,8 @@ def struct_output(args, accelerator):
             exp = f"krona_{attn_config}_{args.diffusion_model}_{args.learning_rate}_{args.learning_rate_text}"
     else: raise AttributeError(f"{args.adapter_type} wrong adapter format.")
 
+    exp = f"{args.diffusion_model}"
+
     exp_ = os.path.join(args.output_dir, exp)
     if accelerator.is_main_process:
         if(os.path.exists(exp_)): pass
