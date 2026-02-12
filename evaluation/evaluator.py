@@ -346,13 +346,13 @@ class Evaluator(object):
             optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
             scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=60, gamma=0.2)
         else:
-            batch_size = 256
+            batch_size = 512
             if syn_dataset.size == 96:
-                n_splits = 2
+                n_splits = 1
             elif syn_dataset.size == 128:
-                n_splits = 4
+                n_splits = 1
             elif syn_dataset.size == 256:
-                n_splits = 8
+                n_splits = 2
             else:
                 n_splits = 1
             max_epoch = 50
@@ -368,6 +368,8 @@ class Evaluator(object):
 
         device = torch.device("cuda:0")
         model = model.to(device)
+        if torch.cuda.device_count() > 1:
+            model = nn.DataParallel(model)
 
         ema = ExponentialMovingAverage(model.parameters(), 0.9999)
 
@@ -388,6 +390,7 @@ class Evaluator(object):
         best_test_acc_on_test = 0.
 
         grad_accu_step = 0
+        scaler = torch.cuda.amp.GradScaler()
 
         for epoch in range(max_epoch):
             model.train()
@@ -400,15 +403,17 @@ class Evaluator(object):
 
                 if grad_accu_step == 0:
                     optimizer.zero_grad()
-                    
-                outputs = model(inputs)
-                loss = criterion(outputs, targets) / n_splits
+
+                with torch.cuda.amp.autocast():
+                    outputs = model(inputs)
+                    loss = criterion(outputs, targets) / n_splits
                 train_loss += loss.item()
-                loss.backward()
+                scaler.scale(loss).backward()
                 grad_accu_step += 1
 
                 if grad_accu_step == n_splits:
-                    optimizer.step()
+                    scaler.step(optimizer)
+                    scaler.update()
                     grad_accu_step = 0
                     ema.update(model.parameters())
 
@@ -428,7 +433,7 @@ class Evaluator(object):
             val_total = 0
             val_correct = 0
             
-            with torch.no_grad():
+            with torch.no_grad(), torch.cuda.amp.autocast():
                 for _, (inputs, targets) in enumerate(val_loader):
                     if len(targets.shape) == 2:
                         inputs = inputs.to(torch.float32)
@@ -448,7 +453,7 @@ class Evaluator(object):
             test_total = 0
             test_correct = 0
         
-            with torch.no_grad():
+            with torch.no_grad(), torch.cuda.amp.autocast():
                 for _, (inputs, targets) in enumerate(sensitive_test_loader):
                     if len(targets.shape) == 2:
                         inputs = inputs.to(torch.float32)

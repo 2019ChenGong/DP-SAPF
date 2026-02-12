@@ -1165,6 +1165,13 @@ def main(args):
                     print(args.attn_keywords, name)
             else:
                 module.requires_grad_(False)
+        elif type(args.attn_keywords) == list:
+            if name in args.attn_keywords:
+                unet_lora_parameters.extend(module.parameters())
+                if accelerator.is_main_process:
+                    print('-', name)
+            else:
+                module.requires_grad_(False)
         elif type(args.attn_keywords) == dict:
             if name in args.attn_keywords and (args.remove_attn_keywords is None or args.remove_attn_keywords not in name):
                 if accelerator.is_main_process:
@@ -1634,7 +1641,7 @@ def visualization(accelerator, args, unet, text_encoder, weight_dtype, global_st
 
     # run inference
     generator = torch.Generator(device=accelerator.device).manual_seed(args.seed) if args.seed else None
-    pipeline_args = {"prompt": args.validation_prompt}
+    pipeline_args = {"prompt": args.validation_prompt, "height": args.resolution, "width": args.resolution}
 
     if args.validation_images is None:
         images = []

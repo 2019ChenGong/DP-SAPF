@@ -1647,7 +1647,7 @@ def visualization(accelerator, args, unet, text_encoder, weight_dtype, global_st
 
     # run inference
     generator = torch.Generator(device=accelerator.device).manual_seed(args.seed) if args.seed else None
-    pipeline_args = {"prompt": args.validation_prompt}
+    pipeline_args = {"prompt": args.validation_prompt, "height": args.resolution, "width": args.resolution}
 
     if args.validation_images is None:
         images = []
