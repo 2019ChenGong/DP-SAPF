@@ -333,7 +333,7 @@ class Evaluator(object):
         criterion = nn.CrossEntropyLoss()
 
         if 'cifar' in self.config.sensitive_data.name:
-            batch_size = 126
+            batch_size = 128
             max_epoch = 200
             n_splits = 1
             if model_name == "wrn":
@@ -346,7 +346,7 @@ class Evaluator(object):
             optimizer = torch.optim.SGD(model.parameters(), lr=0.1, momentum=0.9, weight_decay=5e-4)
             scheduler = torch.optim.lr_scheduler.StepLR(optimizer, step_size=60, gamma=0.2)
         else:
-            batch_size = 512
+            batch_size = 256
             if syn_dataset.size == 96:
                 n_splits = 1
             elif syn_dataset.size == 128:
@@ -390,7 +390,6 @@ class Evaluator(object):
         best_test_acc_on_test = 0.
 
         grad_accu_step = 0
-        scaler = torch.cuda.amp.GradScaler()
 
         for epoch in range(max_epoch):
             model.train()
@@ -404,16 +403,14 @@ class Evaluator(object):
                 if grad_accu_step == 0:
                     optimizer.zero_grad()
 
-                with torch.cuda.amp.autocast():
-                    outputs = model(inputs)
-                    loss = criterion(outputs, targets) / n_splits
+                outputs = model(inputs)
+                loss = criterion(outputs, targets) / n_splits
                 train_loss += loss.item()
-                scaler.scale(loss).backward()
+                loss.backward()
                 grad_accu_step += 1
 
                 if grad_accu_step == n_splits:
-                    scaler.step(optimizer)
-                    scaler.update()
+                    optimizer.step()
                     grad_accu_step = 0
                     ema.update(model.parameters())
 
@@ -433,7 +430,7 @@ class Evaluator(object):
             val_total = 0
             val_correct = 0
             
-            with torch.no_grad(), torch.cuda.amp.autocast():
+            with torch.no_grad():
                 for _, (inputs, targets) in enumerate(val_loader):
                     if len(targets.shape) == 2:
                         inputs = inputs.to(torch.float32)
@@ -453,7 +450,7 @@ class Evaluator(object):
             test_total = 0
             test_correct = 0
         
-            with torch.no_grad(), torch.cuda.amp.autocast():
+            with torch.no_grad():
                 for _, (inputs, targets) in enumerate(sensitive_test_loader):
                     if len(targets.shape) == 2:
                         inputs = inputs.to(torch.float32)
