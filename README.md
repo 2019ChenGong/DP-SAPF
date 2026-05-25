@@ -133,8 +133,6 @@ dataset/
 
 #### 4.3.1 How to Run (RQ1: Main Results)
 
-*Results reported in **Table (tab:rq1)** — FID and Acc of DP-SAPF and baselines across four datasets under $\varepsilon=\{1,10\}$, and **Figure (fig:synthetic_real)** — synthetic vs. real image visualization.*
-
 Users should first activate the conda environment:
 
 ```bash
