@@ -28,7 +28,7 @@ Experiments on four sensitive image datasets show that DP-SAPF improves the util
       - [4.4.2 Results Explanation](#442-results-explanation)
     <!-- - [4.5 Results Visualization](#45-results-visualization) -->
   - [Contacts](#contacts)
-  - [Citation](#citation)
+  <!-- - [Citation](#citation) -->
   - [Acknowledgement](#acknowledgement)
 
 ## 2. Introduction
@@ -40,7 +40,7 @@ We compare DP-SAPF against five DP image synthesis methods that leverage public 
 | Methods | Type | Link |
 | ------- | ---- | ---- |
 | PE | Fine-tuning-free | [\[NeurIPS 2023\] Differentially Private Synthetic Data via Foundation Model APIs](https://arxiv.org/abs/2305.09515) |
-| AUG-PE | Fine-tuning-free | [\[ICML 2024\] Differentially Private Synthetic Data via APIs with Enhanced Mechanisms](TODO) |
+| AUG-PE | Fine-tuning-free | [\[ICML 2024\] Differentially Private Synthetic Data via APIs with Enhanced Mechanisms](https://arxiv.org/abs/2403.01749) |
 | DP-LDM | Fine-tuning-based | [\[TODO\] Differentially Private Latent Diffusion Models](TODO) |
 | DP-LoRA | Fine-tuning-based | [\[TODO\] DP fine-tuning with Low-Rank Adaptation](TODO) |
 | DP-Finetune | Fine-tuning-based | [\[TODO\] Differentially Private Diffusion Models](TODO) | -->
@@ -147,7 +147,7 @@ Train DP-SAPF (example: CIFAR-10, 4 GPUs):
 bash scripts/script-dp-sapf.sh
 ```
 
-Train baselines:
+<!-- Train baselines:
 
 ```bash
 bash scripts/script-pe.sh
@@ -155,7 +155,7 @@ bash scripts/script-augpe.sh
 bash scripts/script-dp-finetune.sh
 bash scripts/script-dp-lora.sh
 bash scripts/script-dp-ldm.sh
-```
+``` -->
 
 Users can edit `MODEL_NAME` in each script to switch public models:
 
@@ -186,10 +186,14 @@ RQ2 uses `Stable-Diffusion-v1-5` as the public model and $\varepsilon=10.0$. We 
 - **Layer-Level**: performs layer-wise selection instead of matrix-wise selection.
 - **All Parameter**: applies saliency-aware selection to all fine-tunable parameter matrices (not only attention layers).
 
-Run each variant by setting `[TODO: variant flag]`:
+Run each variant by setting:
 
 ```bash
-[TODO: commands for each variant]
+bash scripts/script-dp-sapf-all.sh
+bash scripts/script-dp-sapf-layer.sh
+bash scripts/script-dp-sapf-noisy.sh
+bash scripts/script-dp-sapf-nolora.sh
+bash scripts/script-dp-sapf-random.sh
 ```
 
 For **Figure (fig:rq2)**, please refer to `plot/ablation.py`.
@@ -227,7 +231,7 @@ python cal_privacy.py --method DP-SAPF --data_name celeba_male_256 -e 10.0 train
 
 For **Figure (fig:privacy_budget)**, please refer to `plot/plot_param_change.py` and `plot/plot_selection_ratio_combined.py`.
 
-#### 4.3.4 How to Run (Discussions)
+<!-- #### 4.3.4 How to Run (Discussions)
 
 **Non-private setting** (*Table tab:no_dp* — DP-SAPF at $\varepsilon=\{10, \infty\}$):
 
@@ -252,7 +256,7 @@ For the transferability figure, please refer to `plot/plot_models_mechanism.py`.
 
 **Computational resources** (*Table tab:computationalResource* — GPU memory and runtime per stage):
 
-The resource comparison uses CIFAR-10 with `Stable-Diffusion-v1-5`. DP-SAPF saves ~11.0% GPU memory and ~9.1% total runtime compared to DP-LoRA by updating fewer parameter matrices (peak memory: 25.8 GB vs. 29.0 GB for DP-LoRA).
+The resource comparison uses CIFAR-10 with `Stable-Diffusion-v1-5`. DP-SAPF saves ~11.0% GPU memory and ~9.1% total runtime compared to DP-LoRA by updating fewer parameter matrices (peak memory: 25.8 GB vs. 29.0 GB for DP-LoRA). -->
 
 ### 4.4 Results
 
@@ -310,6 +314,8 @@ We provide the plotting codes in the folder `plot/`.
 If you have any question about our work or this repository, please don't hesitate to contact us by email or open an issue.
 
 - Chen Gong (ChenG_abc@outlook.com)
+
+- Kecen Li (sunameizing@gmail.com)
 
 <!-- ## Citation
 
