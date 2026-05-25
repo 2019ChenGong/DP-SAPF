@@ -3,196 +3,325 @@
 # DP-SAPF: Saliency-Aware Parameter Fine-tuning of Public Models for Differentially Private Image Synthesis
 </div>
 
-This is the official implementation of paper ***DP-SAPF: Saliency-Aware Parameter Fine-tuning of Public Models for Differentially Private Image Synthesis***. This repository contains Pytorch training code and evaluation code. DP-SAPF is a Differetial Privacy (DP) image generation tool, which leverages the DP technique to generate synthetic data to replace the sensitive data, allowing organizations to share and utilize synthetic images without privacy concerns.
+This is the official implementation of DP-SAPF. DP-SAPF proposes a saliency-aware strategy to identify specific target parameters for LoRA training under differential privacy (DP). By selecting only the most salient parameter matrices — those with the highest gradient magnitudes on sensitive images — DP-SAPF reduces noise accumulation and avoids the training collapse that occurs when all attention layers are fine-tuned with DP-SGD.
 
-
-## 1. Contents
-- DP-SAPF: Saliency-Aware Parameter Fine-tuning of Public Models for Differentially Private Image Synthesis
-  - [1. Contents](#1-contents)
-  - [2. Introduction](#2-introduction)
-  - [3. Get Start](#3-get-start)
-    - [3.1 Installation](#31-installation)
-    - [3.2 Dataset and Files Preparation](#32-dataset-and-files-preparation)
-    - [3.3 Training](#33-training)<div align=center>
-
-# DP-SAPF: Saliency-Aware Parameter Fine-tuning of Public Models for Differentially Private Image Synthesis
-</div>
-
-This is the official implementation of paper ***DP-SAPF: Saliency-Aware Parameter Fine-tuning of Public Models for Differentially Private Image Synthesis***. This repository contains Pytorch training code and evaluation code. DP-SAPF is a Differetial Privacy (DP) image generation tool, which leverages the DP technique to generate synthetic data to replace the sensitive data, allowing organizations to share and utilize synthetic images without privacy concerns.
-
+Experiments on four sensitive image datasets show that DP-SAPF improves the utility and fidelity of synthetic images while requiring fewer computational resources than fine-tuning methods without parameter selection.
 
 ## 1. Contents
-- DP-SAPF: Saliency-Aware Parameter Fine-tuning of Public Models for Differentially Private Image Synthesis
   - [1. Contents](#1-contents)
   - [2. Introduction](#2-introduction)
-  - [3. Get Start](#3-get-start)
-    - [3.1 Installation](#31-installation)
-    - [3.2 Dataset and Files Preparation](#32-dataset-and-files-preparation)
-    - [3.3 Training](#33-training)
-    - [3.4 Evaluation](#34-evaluation)
+    <!-- - [2.1 Baselines](#21-baselines) -->
+    - [2.1 Investigated Datasets](#22-investigated-datasets)
+    - [2.2 Public Models](#23-public-models)
+  - [3. Repo Contents](#3-repo-contents)
+  - [4. Quick Start](#4-quick-start)
+    - [4.1 Installation](#41-installation)
+    - [4.2 Prepare Dataset](#42-prepare-dataset)
+    - [4.3 Running](#43-running)
+      <!-- - [4.3.1 Key Hyper-parameter Introductions](#431-key-hyper-parameter-introductions) -->
+      - [4.3.1 How to Run (RQ1: Main Results)](#432-how-to-run-rq1-main-results)
+      - [4.3.2 How to Run (RQ2: Strengths of Parameter Selection)](#433-how-to-run-rq2-strengths-of-parameter-selection)
+      - [4.3.3 How to Run (RQ3: Hyper-parameter Analysis)](#434-how-to-run-rq3-hyper-parameter-analysis)
+      - [4.3.4 How to Run (Discussions)](#435-how-to-run-discussions)
+    - [4.4 Results](#44-results)
+      - [4.4.1 Results Structure](#441-results-structure)
+      - [4.4.2 Results Explanation](#442-results-explanation)
+    <!-- - [4.5 Results Visualization](#45-results-visualization) -->
+  - [Contacts](#contacts)
+  - [Citation](#citation)
+  - [Acknowledgement](#acknowledgement)
 
 ## 2. Introduction
 
-Differentially private (DP) image synthesis generates images that preserve the statistical characteristics of a sensitive dataset, enabling sensitive data analysis and usage while providing rigorous guarantees of privacy leakage. Existing methods typically fine-tune public models using DP Stochastic Gradient Descent (DP-SGD) on sensitive images to generate synthetic images. But full fine-tuning public models on sensitive datasets is computationally expensive and time-consuming, because current public models typically contain a large number of parameters. Existing methods propose using Low-Rank Adaptation (LoRA) to reduce the number of trainable parameters. However, we argue that exhaustive LoRA coverage across all public model layers is suboptimal in a DP setting, as it leads to excessive noise accumulation and is detrimental to training stability. 
+<!-- ### 2.1 Baselines
 
-To address this issue, we propose DP-SAPF, which uses a saliency-aware strategy to identify specific target parameters for LoRA training under DP. DP-SAPF is inspired by the fact that larger gradients signify higher saliency, indicating that these parameters are most critical for the DP learning. Specifically, we feed the sensitive images into public models, compute gradients, and add noise to the gradients to satisfy DP. Then, DP-SAPF identifies the most salient parameters, those exhibiting high gradient magnitudes on sensitive images, for DP fine-tuning.
+We compare DP-SAPF against five DP image synthesis methods that leverage public models.
 
-## 3. Get Start
-We provide an example for how to reproduce the results on CIFAR-10 in our paper.
+| Methods | Type | Link |
+| ------- | ---- | ---- |
+| PE | Fine-tuning-free | [\[NeurIPS 2023\] Differentially Private Synthetic Data via Foundation Model APIs](https://arxiv.org/abs/2305.09515) |
+| AUG-PE | Fine-tuning-free | [\[ICML 2024\] Differentially Private Synthetic Data via APIs with Enhanced Mechanisms](TODO) |
+| DP-LDM | Fine-tuning-based | [\[TODO\] Differentially Private Latent Diffusion Models](TODO) |
+| DP-LoRA | Fine-tuning-based | [\[TODO\] DP fine-tuning with Low-Rank Adaptation](TODO) |
+| DP-Finetune | Fine-tuning-based | [\[TODO\] Differentially Private Diffusion Models](TODO) | -->
 
-### 3.1 Installation
+### 2.1 Investigated Datasets
 
-To set up the environment of DP-SAPF, we use `conda` to manage our dependencies. 
+We perform experiments on four sensitive image datasets.
 
-Please run the following commands to install the environments for training and evaluation:
- ```
+| Dataset | Training | Validation | Test | Resolution | Categories |
+| ------- | -------- | ---------- | ---- | ---------- | ---------- |
+| CIFAR-10 | 45,000 | 5,000 | 10,000 | 32×32 | 10 |
+| OCTMNIST | 97,477 | 10,832 | 1,000 | 128×128 | 4 |
+| CelebA | 162,770 | 19,867 | 19,962 | 256×256 | 2 (Gender) |
+| Camelyon | 302,436 | 34,904 | 85,054 | 96×96 | 2 (Tumor) |
+
+### 2.2 Public Models
+
+We evaluate DP-SAPF on four widely-used public diffusion models.
+
+| Public Model | Source | Resolution | Size | Year |
+| ------------ | ------ | ---------- | ---- | ---- |
+| [Stable-Diffusion-v1-5](https://huggingface.co/Manojb/stable-diffusion-2-1-base) | Stability AI | 512×512 | 1B | 2022 |
+| [Stable-Diffusion-2-1-base](https://huggingface.co/Manojb/stable-diffusion-2-1-base) | Stability AI | 512×512 | 1B | 2022 |
+| [Realistic-v6](https://huggingface.co/SG161222/Realistic_Vision_V6.0_B1_noVAE) | Hugging Face | 896×896 | 1B | 2024 |
+| [Prompt2med](https://huggingface.co/Nihirc/Prompt2MedImage) | Hugging Face | 512×512 | 1B | 2024 |
+
+The public models will be downloaded automatically when running the training scripts.
+
+## 3. Repo Contents
+
+```plaintext
+gap/
+├── configs/            # Configuration files for DP image synthesis algorithms
+├── data/               # Data preparation scripts
+├── dataset/            # Datasets studied in the project
+├── dm-lora/            # LoRA training for diffusion models
+├── docker/             # Docker file
+├── exp/                # Training outputs and evaluation results
+├── evaluation/         # Evaluation module (utility and fidelity)
+│   └── evaluator.py
+├── models/             # DP image synthesis algorithm implementations
+├── opacus/             # DP-SGD implementation
+├── plot/               # Figures and plotting scripts
+├── scripts/            # Training and baseline scripts
+│   ├── script-dp-sapf.sh
+│   ├── script-pe.sh
+│   ├── script-augpe.sh
+│   ├── script-dp-finetune.sh
+│   ├── script-dp-lora.sh
+│   └── script-dp-ldm.sh
+├── utils/              # Helper functions
+├── dm-lora/            # Main training code
+├── eval.py             # Evaluation entry
+├── cal_privacy.py      # Privacy budget (RDP cost ratio) calculation
+└── requirements.txt
+```
+
+## 4. Quick Start
+
+### 4.1 Installation
+
+To set up the environment of DP-SAPF, we use `conda` to manage our dependencies.
+
+```bash
+git clone https://github.com/2019ChenGong/DP-SAPF.git
+cd gap
 bash install.sh
 bash install_lora.sh
- ```
-
-### 3.2 Dataset and Files Preparation
-
-Preprocess dataset.
 ```
+
+### 4.2 Prepare Dataset
+
+```bash
+conda activate dpimagebench
 bash data_preparation.sh
 ```
 
 After running, we can find the folder `dataset`:
 
-  ```plaintext
-dataset/                                  
-├── camelyon/       
-├── celeba/ 
-├── cifar10/ 
+```plaintext
+dataset/
+├── camelyon/
+├── celeba/
+├── cifar10/
+├── octmnist/
 ...
 ```
 
-We list the studied datasets as follows in our paper, which include four sensitive datasets.
-  | Usage |  Dataset  |
-  | ------- | --------------------- |
-  | Sensitive dataset | CIFAR-10, OCTMNIST, CelebA, Camelyon |
+### 4.3 Running
 
+#### 4.3.1 How to Run (RQ1: Main Results)
 
-We list the studied public models as follows in our paper, which include four public models.
-  | Usage |  Model Name  |
-  | ------- | --------------------- |
-  | Public Model | Stable-Diffusion-v1-5, Stable-Diffusion-2-1-base, Realistic-v6, Prompt2med |
+*Results reported in **Table (tab:rq1)** — FID and Acc of DP-SAPF and baselines across four datasets under $\varepsilon=\{1,10\}$, and **Figure (fig:synthetic_real)** — synthetic vs. real image visualization.*
 
-The public models will be downloaded automatically when runing the training codes as follows.
+Users should first activate the conda environment:
 
-
-
-### 3.3 Training
-Please run:
+```bash
+conda activate dpimagebench
 ```
+
+Train DP-SAPF (example: CIFAR-10, 4 GPUs):
+
+```bash
 bash scripts/script-dp-sapf.sh
 ```
 
-After training, the synthetic images will be saved in `exp/lora_cifar10_32_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/gen`.
+Train baselines:
 
-To evaluate DP-SAPF on other sensitive datasets, please edit dataset name and dataset folder in line 4-5 in `scripts/script-dp-sapf.sh`. The dataset folder can be found in `/dataset`.
-
-For baselines PE, DP-Finetune, DP-LoRA, and DP-LDM, please run:
-
-```
+```bash
 bash scripts/script-pe.sh
+bash scripts/script-augpe.sh
 bash scripts/script-dp-finetune.sh
 bash scripts/script-dp-lora.sh
 bash scripts/script-dp-ldm.sh
 ```
 
-Users can also edit `MODEL_NAME="stable-diffusion-v1-5/stable-diffusion-v1-5"` in each script for other public models. The following three public models are used in our experiments:
+Users can edit `MODEL_NAME` in each script to switch public models:
+
 ```
+stable-diffusion-v1-5/stable-diffusion-v1-5
 Manojb/stable-diffusion-2-1-base
-Nihirc/Prompt2MedImage
 SG161222/Realistic_Vision_V6.0_B1_noVAE
+Nihirc/Prompt2MedImage
 ```
 
+Evaluate (change `-dn` and `-ep` for other datasets/methods):
 
-### 3.4 Evaluation
-
-Please run:
-```
-conda activate dpimagebench
-python eval.py -dn cifar10_32 -ep exp/lora_cifar10_32_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/gen
-```
-The FID and Acc on the testset will be saved into `exp/lora_cifar10_32_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/stdout.txt`.
-
-For baselines, you just need to change `-ep` into the corresponding output directory like
-```
-conda activate dpimagebench
+```bash
 python eval.py -dn cifar10_32 -ep <output-dir>
 ```
-    - [3.4 Evaluation](#34-evaluation)
 
-## 2. Introduction
+For **Figure (fig:synthetic_real)**, please refer to `plot/visualization.py`, `plot/visualization1.py`, and `plot/visualization2.py`.
 
-Differentially private (DP) image synthesis generates images that preserve the statistical characteristics of a sensitive dataset, enabling sensitive data analysis and usage while providing rigorous guarantees of privacy leakage. Existing methods typically fine-tune public models using DP Stochastic Gradient Descent (DP-SGD) on sensitive images to generate synthetic images. But full fine-tuning public models on sensitive datasets is computationally expensive and time-consuming, because current public models typically contain a large number of parameters. Existing methods propose using Low-Rank Adaptation (LoRA) to reduce the number of trainable parameters. However, we argue that exhaustive LoRA coverage across all public model layers is suboptimal in a DP setting, as it leads to excessive noise accumulation and is detrimental to training stability. 
+#### 4.3.2 How to Run (RQ2: Strengths of Parameter Selection)
 
-To address this issue, we propose DP-SAPF, which uses a saliency-aware strategy to identify specific target parameters for LoRA training under DP. DP-SAPF is inspired by the fact that larger gradients signify higher saliency, indicating that these parameters are most critical for the DP learning. Specifically, we feed the sensitive images into public models, compute gradients, and add noise to the gradients to satisfy DP. Then, DP-SAPF identifies the most salient parameters, those exhibiting high gradient magnitudes on sensitive images, for DP fine-tuning.
+*Results reported in **Figure (fig:rq2)** — FID and Acc of DP-SAPF vs. five ablation variants, and **Table (tab:carefully)** — manually selected query-only fine-tuning comparison.*
 
-## 3. Get Start
-We provide an example for how to reproduce the results on CIFAR-10 in our paper.
+RQ2 uses `Stable-Diffusion-v1-5` as the public model and $\varepsilon=10.0$. We compare DP-SAPF against the following five variants:
 
-### 3.1 Installation
+- **Random**: randomly selects parameter matrices without saliency-aware mechanism.
+- **Noisy**: replaces unselected parameters with random values to measure the contribution of the public model's generative capability.
+- **w/o LoRA**: fine-tunes the selected parameter matrices directly with DP-SGD, without LoRA.
+- **Layer-Level**: performs layer-wise selection instead of matrix-wise selection.
+- **All Parameter**: applies saliency-aware selection to all fine-tunable parameter matrices (not only attention layers).
 
-To set up the environment of DP-SAPF, we use `conda` to manage our dependencies. 
+Run each variant by setting `[TODO: variant flag]`:
 
-Please run the following commands to install the environments for training and evaluation:
- ```
-bash install.sh
-bash install_lora.sh
- ```
-
-### 3.2 Dataset and Files Preparation
-
-Preprocess dataset.
-```
-bash data_preparation.sh
+```bash
+[TODO: commands for each variant]
 ```
 
-After running, we can find the folder `dataset`:
+For **Figure (fig:rq2)**, please refer to `plot/ablation.py`.
+For parameter selection visualization, please refer to `plot/vis_selection.py`.
 
-  ```plaintext
-dataset/                                  
-├── camelyon/       
-├── celeba/ 
-├── cifar10/ 
-...
+#### 4.3.3 How to Run (RQ3: Hyper-parameter Analysis)
+
+*Results reported in **Figure (fig:privacy_budget)** — FID and Acc under varying $\varepsilon$ and selection ratio $c$, **Table (tab:selective_finetuning)** — selected parameter matrices per ratio, **Table (tab:ratio_performance)** — sensitivity to noise scale $\sigma_s$, and **Table (tab:ratio)** — RDP cost ratios.*
+
+All RQ3 experiments use `Stable-Diffusion-v1-5`. Two sensitivity axes are evaluated:
+
+**Selection ratio** $c \in \{5\%, 10\%, 20\%, 30\%, 40\%, 50\%, 60\%, 70\%\}$ under $\varepsilon=10.0$:
+
+```bash
+[TODO: command with train.top_ratio=X]
 ```
 
-We list the studied datasets as follows in our paper, which include four sensitive datasets.
-  | Usage |  Dataset  |
-  | ------- | --------------------- |
-  | Sensitive dataset | CIFAR-10, OCTMNIST, CelebA, Camelyon |
+**Privacy budget** $\varepsilon \in \{0.2, 1.0, 5.0, 10.0, 15.0, 20.0\}$:
 
-
-We list the studied public models as follows in our paper, which include four public models.
-  | Usage |  Dataset  |
-  | ------- | --------------------- |
-  | Sensitive dataset | Stable-Diffusion-v1-5, Stable-Diffusion-2-1-base, Realistic-v6, Prompt2med |
-
-The public models will be downloaded automatically when runing the training codes as follows.
-
-
-
-### 3.3 Training
-Please run:
-```
-bash scripts/script-dp-sapf.sh
+```bash
+[TODO: command with -e X]
 ```
 
-After training, the synthetic images will be saved in `exp/lora_cifar10_32_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/gen`.
+**Noise scale** $\sigma_s \in \{5.0, 10.0, 20.0, 25.0\}$ for CelebA:
 
-To evaluate DP-SAPF on other sensitive datasets, please edit dataset name and dataset folder in line 4-5 in `scripts/script-dp-sapf.sh`. The dataset folder can be found in `/dataset`.
-
-Users can also edit `MODEL_NAME="stable-diffusion-v1-5/stable-diffusion-v1-5"` in line 14 for other public models.
-
-### 3.4 Evaluation
-
-Please run:
+```bash
+[TODO: command with train.sigma_s=X]
 ```
-conda activate dpimagebench
-python eval.py -dn cifar10_32 -ep exp/lora_cifar10_32_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/gen
+
+To compute RDP cost ratios (parameter-selection / DP-SGD):
+
+```bash
+python cal_privacy.py --method DP-SAPF --data_name celeba_male_256 -e 10.0 train.sigma_s=5.0
 ```
-The FID and Acc on the testset will be saved into `exp/lora_cifar10_32_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/stdout.txt`.
+
+For **Figure (fig:privacy_budget)**, please refer to `plot/plot_param_change.py` and `plot/plot_selection_ratio_combined.py`.
+
+#### 4.3.4 How to Run (Discussions)
+
+**Non-private setting** (*Table tab:no_dp* — DP-SAPF at $\varepsilon=\{10, \infty\}$):
+
+Run without Gaussian noise injection by setting `[TODO: no-DP flag]`.
+
+**Without fine-tuning** (*Table tab:no_finetuning* — public model zero-shot vs. DP-SAPF fine-tuned):
+
+Generate directly from the pretrained public model without any fine-tuning on sensitive data:
+
+```bash
+[TODO: command]
+```
+
+**Transferability** (*Figure fig:dit* — DP-SAPF on DiT and alternative DP mechanisms EM / PTR):
+
+```bash
+[TODO: command for DiT backbone]
+[TODO: command for EM / PTR mechanism]
+```
+
+For the transferability figure, please refer to `plot/plot_models_mechanism.py`.
+
+**Computational resources** (*Table tab:computationalResource* — GPU memory and runtime per stage):
+
+The resource comparison uses CIFAR-10 with `Stable-Diffusion-v1-5`. DP-SAPF saves ~11.0% GPU memory and ~9.1% total runtime compared to DP-LoRA by updating fewer parameter matrices (peak memory: 25.8 GB vs. 29.0 GB for DP-LoRA).
+
+### 4.4 Results
+
+We can find the `stdout.txt` files in the result folder, which record the training and evaluation processes. The result folder name consists of `<data_name>_eps<epsilon><notes>-<starting-time>`.
+
+#### 4.4.1 Results Structure
+
+```plaintext
+exp/
+├── dp-sapf/
+│   └── cifar10_32_eps10.0-2025-01-01-00-00-00/
+│       ├── gen/
+│       │   ├── gen.npz          # synthetic images
+│       │   └── sample.png       # sample grid of synthetic images
+│       ├── train/
+│       │   ├── checkpoints/
+│       │   │   ├── final_checkpoint.pth
+│       │   │   └── snapshot_checkpoint.pth
+│       │   └── samples/
+│       └── stdout.txt           # training log and evaluation results
+├── pe/
+├── aug-pe/
+├── dp-lora/
+├── dp-ldm/
+└── dp-finetune/
+```
+
+#### 4.4.2 Results Explanation
+
+The following results can be found at the end of `stdout.txt`:
+
+```
+INFO - evaluator.py - The best acc of synthetic images on sensitive val ... from wrn is [X] and [X]
+INFO - evaluator.py - The average and std of accuracy of synthetic images are [X] and [X]
+INFO - evaluator.py - The FID of synthetic images is [X]
+INFO - evaluator.py - The Inception Score of synthetic images is [X]
+INFO - evaluator.py - The Precision and Recall of synthetic images is [X] and [X]
+```
+
+The synthetic images can be found at `./exp/dp-sapf/<file_name>/gen/gen.npz`.
+
+<!-- ### 4.5 Results Visualization
+
+We provide the plotting codes in the folder `plot/`.
+
+- `visualization.py` / `visualization1.py` / `visualization2.py`: synthetic vs. real image grids (Figure fig:synthetic_real, RQ1).
+- `ablation.py`: ablation figure comparing DP-SAPF vs. five variants (Figure fig:rq2, RQ2).
+- `vis_selection.py`: visualization of selected parameter matrices across layers.
+- `plot_param_change.py`: FID and Acc under varying privacy budget and selection ratio (Figure fig:privacy_budget, RQ3).
+- `plot_selection_ratio_combined.py`: combined selection ratio analysis (RQ3).
+- `plot_models_mechanism.py`: transferability to DiT and alternative DP mechanisms (Figure fig:dit, Discussion). -->
+
+## Contacts
+
+If you have any question about our work or this repository, please don't hesitate to contact us by email or open an issue.
+
+- Chen Gong (ChenG_abc@outlook.com)
+
+<!-- ## Citation
+
+```text
+@article{TODO,
+  title={DP-SAPF: Saliency-Aware Parameter Fine-tuning of Public Models for Differentially Private Image Synthesis},
+  author={TODO},
+  journal={TODO},
+  year={2025}
+}
+``` -->
+
+## Acknowledgement
+
+Part of the code is borrowed from [DPImageBench](https://github.com/2019ChenGong/DPImageBench). We sincerely thank them for their contributions to the community.
