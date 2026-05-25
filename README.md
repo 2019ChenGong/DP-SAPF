@@ -176,8 +176,6 @@ For **Figure (fig:synthetic_real)**, please refer to `plot/visualization.py`, `p
 
 #### 4.3.2 How to Run (RQ2: Strengths of Parameter Selection)
 
-*Results reported in **Figure (fig:rq2)** — FID and Acc of DP-SAPF vs. five ablation variants, and **Table (tab:carefully)** — manually selected query-only fine-tuning comparison.*
-
 RQ2 uses `Stable-Diffusion-v1-5` as the public model and $\varepsilon=10.0$. We compare DP-SAPF against the following five variants:
 
 - **Random**: randomly selects parameter matrices without saliency-aware mechanism.
@@ -200,8 +198,6 @@ For **Figure (fig:rq2)**, please refer to `plot/ablation.py`.
 For parameter selection visualization, please refer to `plot/vis_selection.py`.
 
 #### 4.3.3 How to Run (RQ3: Hyper-parameter Analysis)
-
-*Results reported in **Figure (fig:privacy_budget)** — FID and Acc under varying $\varepsilon$ and selection ratio $c$, **Table (tab:selective_finetuning)** — selected parameter matrices per ratio, **Table (tab:ratio_performance)** — sensitivity to noise scale $\sigma_s$, and **Table (tab:ratio)** — RDP cost ratios.*
 
 All RQ3 experiments use `Stable-Diffusion-v1-5`. Two sensitivity axes are evaluated:
 
