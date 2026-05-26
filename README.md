@@ -199,7 +199,7 @@ For parameter selection visualization, please refer to `plot/vis_selection.py`.
 
 All RQ3 experiments use `Stable-Diffusion-v1-5`. Two sensitivity axes are evaluated:
 
-**Selection ratio** $c \in \{5\%, 10\%, 20\%, 30\%, 40\%, 50\%, 60\%, 70\%\}$ under $\varepsilon=10.0$:
+**Selection ratio** $c \in \{0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7\}$ under $\varepsilon=10.0$:
 
 ```bash
 bash script-dp-sapf-topk.sh
@@ -211,17 +211,17 @@ bash script-dp-sapf-topk.sh
 bash script-dp-sapf-eps.sh
 ```
 
-**Noise scale** $\sigma_s \in \{5.0, 10.0, 20.0, 25.0\}$ for CelebA:
+**Noise scale** $\sigma_s \in \{5.0, 10.0, 20.0, 25.0\}$:
 
 ```bash
 bash script-dp-sapf-sigma.sh
 ```
 
-To compute RDP cost ratios (parameter-selection / DP-SGD):
+<!-- To compute RDP cost ratios (parameter-selection / DP-SGD):
 
 ```bash
 python cal_privacy.py --method DP-SAPF --data_name celeba_male_256 -e 10.0 train.sigma_s=5.0
-```
+``` -->
 
 For **Figure (fig:privacy_budget)**, please refer to `plot/plot_param_change.py` and `plot/plot_selection_ratio_combined.py`.
 
