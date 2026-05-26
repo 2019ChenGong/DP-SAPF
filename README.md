@@ -254,28 +254,27 @@ The resource comparison uses CIFAR-10 with `Stable-Diffusion-v1-5`. DP-SAPF save
 
 ### 4.4 Results
 
-We can find the `stdout.txt` files in the result folder, which record the training and evaluation processes. The result folder name consists of `<data_name>_eps<epsilon><notes>-<starting-time>`.
+The results are recorded in `stdout.txt` inside each experiment folder.
 
 #### 4.4.1 Results Structure
 
+DP-SAPF produces a two-level output. The top-level folder `lora_{dataset}_{bs}_{steps}_eps{eps}` contains a subfolder for the parameter-selection stage and another for the DP fine-tuning and generation stage.
+
 ```plaintext
 exp/
-├── dp-sapf/
-│   └── cifar10_32_eps10.0-2025-01-01-00-00-00/
+├── lora_cifar10_32_4096bs_1ksteps_eps10/              # OUTPUT_DIR
+│   └── lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/  # DP fine-tuning + generation
 │       ├── gen/
-│       │   ├── gen.npz          # synthetic images
-│       │   └── sample.png       # sample grid of synthetic images
-│       ├── train/
-│       │   ├── checkpoints/
-│       │   │   ├── final_checkpoint.pth
-│       │   │   └── snapshot_checkpoint.pth
-│       │   └── samples/
-│       └── stdout.txt           # training log and evaluation results
-├── pe/
-├── aug-pe/
-├── dp-lora/
-├── dp-ldm/
-└── dp-finetune/
+│       │   ├── syn_images.npy                         # synthetic images
+│       │   ├── syn_labels.npy                         # synthetic labels
+│       │   └── sample.png                             # sample grid
+│       ├── pytorch_lora_weights.safetensors           # trained LoRA weights
+│       ├── tuning_layers.json                         # selected parameter matrices
+│       ├── samples/
+│       │   └── validation_samples_*.png               # training progress samples
+│       ├── log.txt
+│       └── stdout.txt                                 # evaluation results
+...
 ```
 
 #### 4.4.2 Results Explanation
@@ -283,14 +282,15 @@ exp/
 The following results can be found at the end of `stdout.txt`:
 
 ```
-INFO - evaluator.py - The best acc of synthetic images on sensitive val ... from wrn is [X] and [X]
-INFO - evaluator.py - The average and std of accuracy of synthetic images are [X] and [X]
-INFO - evaluator.py - The FID of synthetic images is [X]
-INFO - evaluator.py - The Inception Score of synthetic images is [X]
-INFO - evaluator.py - The Precision and Recall of synthetic images is [X] and [X]
+INFO - evaluator.py - The FID of synthetic images is XX
+INFO - evaluator.py - The Inception Score of synthetic images is XX
+INFO - evaluator.py - The Precision and Recall of synthetic images is XX and XX
+INFO - evaluator.py - The FLD of synthetic images is XX
+INFO - evaluator.py - The best acc of accuracy (adding noise to the results on the sensitive set of validation set) of synthetic images from resnet, wrn, and resnext are [XX, XX, XX].
+INFO - evaluator.py - The average and std of accuracy of synthetic images are XX and XX
 ```
 
-The synthetic images can be found at `./exp/dp-sapf/<file_name>/gen/gen.npz`.
+The synthetic images can be found at `./exp/lora_{dataset}_{bs}_{steps}_eps{eps}/lora_k4q4v4o4_{lower_name}_{lr}/gen/`.
 
 <!-- ### 4.5 Results Visualization
 
