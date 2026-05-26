@@ -202,19 +202,19 @@ All RQ3 experiments use `Stable-Diffusion-v1-5`. Two sensitivity axes are evalua
 **Selection ratio** $c \in \{5\%, 10\%, 20\%, 30\%, 40\%, 50\%, 60\%, 70\%\}$ under $\varepsilon=10.0$:
 
 ```bash
-[TODO: command with train.top_ratio=X]
+bash script-dp-sapf-topk.sh
 ```
 
 **Privacy budget** $\varepsilon \in \{0.2, 1.0, 5.0, 10.0, 15.0, 20.0\}$:
 
 ```bash
-[TODO: command with -e X]
+bash script-dp-sapf-eps.sh
 ```
 
 **Noise scale** $\sigma_s \in \{5.0, 10.0, 20.0, 25.0\}$ for CelebA:
 
 ```bash
-[TODO: command with train.sigma_s=X]
+bash script-dp-sapf-sigma.sh
 ```
 
 To compute RDP cost ratios (parameter-selection / DP-SGD):

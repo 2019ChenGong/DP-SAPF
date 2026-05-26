@@ -316,17 +316,17 @@ if __name__ == "__main__":
         syn_dataset = MemmapDataset(os.path.join(path, "syn_images.npy"), os.path.join(path, "syn_labels.npy"), c=c, size=size, num_classes=nc)
         return syn_dataset
 
-    cifar = load("/p/fzv6enresearch/gap/exp/lora_cifar10_32_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/gen", size=32, nc=10)
-    camelyon = load("/p/fzv6enresearch/gap/exp/lora_camelyon_96_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/gen", size=96, nc=2)
-    oct = load("/p/fzv6enresearch/gap/exp/lora_octmnist_128_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/gen", size=128, nc=4)
-    celeba = load("/p/fzv6enresearch/gap/exp/lora_celeba_male_256_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/gen", size=256, nc=2)
+    cifar = load("exp/lora_cifar10_32_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/gen", size=32, nc=10)
+    camelyon = load("exp/lora_camelyon_96_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/gen", size=96, nc=2)
+    oct = load("exp/lora_octmnist_128_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/gen", size=128, nc=4)
+    celeba = load("exp/lora_celeba_male_256_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/gen", size=256, nc=2)
 
     from data.stylegan3.dataset import ImageFolderDataset
 
-    cifar = ImageFolderDataset("/p/fzv6enresearch/gap/dataset/cifar10/train_32.zip", 32, 3, use_labels=True)
-    camelyon = ImageFolderDataset("/p/fzv6enresearch/gap/exp/train_96.zip", 96, 3, use_labels=True)
-    oct = ImageFolderDataset("/p/fzv6enresearch/gap/dataset/octmnist/train_128.zip", 128, 3, use_labels=True)
-    celeba = ImageFolderDataset("/p/fzv6enresearch/gap/dataset/celeba/train_256_Male.zip", 256, 3, use_labels=True)
+    cifar = ImageFolderDataset("dataset/cifar10/train_32.zip", 32, 3, use_labels=True)
+    camelyon = ImageFolderDataset("exp/train_96.zip", 96, 3, use_labels=True)
+    oct = ImageFolderDataset("dataset/octmnist/train_128.zip", 128, 3, use_labels=True)
+    celeba = ImageFolderDataset("dataset/celeba/train_256_Male.zip", 256, 3, use_labels=True)
 
     from torch.utils.data import Subset
 

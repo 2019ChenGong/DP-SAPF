@@ -164,10 +164,10 @@ if __name__ == "__main__":
         syn_dataset = MemmapDataset(os.path.join(path, "syn_images.npy"), os.path.join(path, "syn_labels.npy"), c=c, size=size, num_classes=nc)
         return syn_dataset
 
-    cifar = load("/p/fzv6enresearch/gap/exp/lora_cifar10_32_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/gen", size=32, nc=10)
-    camelyon = load("/p/fzv6enresearch/gap/exp/lora_camelyon_96_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/gen", size=96, nc=2)
-    oct = load("/p/fzv6enresearch/gap/exp/lora_octmnist_128_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/gen", size=128, nc=4)
-    celeba = load("/p/fzv6enresearch/gap/exp/lora_celeba_male_256_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/gen", size=256, nc=2)
+    cifar = load("exp/lora_cifar10_32_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/gen", size=32, nc=10)
+    camelyon = load("exp/lora_camelyon_96_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/gen", size=96, nc=2)
+    oct = load("exp/lora_octmnist_128_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/gen", size=128, nc=4)
+    celeba = load("exp/lora_celeba_male_256_4096bs_1ksteps_eps10/lora_k4q4v4o4_base_top0.3_fs5_finegrained_0.0005/gen", size=256, nc=2)
 
     # 批量生成
     datasets_info = [
