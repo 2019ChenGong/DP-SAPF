@@ -170,7 +170,7 @@ Evaluate (change `-dn` and `-ep` for other datasets/methods):
 python eval.py -dn cifar10_32 -ep <output-dir>
 ```
 
-For **Figure (fig:synthetic_real)**, please refer to `plot/visualization.py`, `plot/visualization1.py`, and `plot/visualization2.py`.
+<!-- For **Figure (fig:synthetic_real)**, please refer to `plot/visualization.py`, `plot/visualization1.py`, and `plot/visualization2.py`. -->
 
 #### 4.3.2 How to Run (RQ2: Strengths of Parameter Selection)
 
@@ -225,32 +225,34 @@ python cal_privacy.py --method DP-SAPF --data_name celeba_male_256 -e 10.0 train
 
 For **Figure (fig:privacy_budget)**, please refer to `plot/plot_param_change.py` and `plot/plot_selection_ratio_combined.py`.
 
-<!-- #### 4.3.4 How to Run (Discussions)
+#### 4.3.3 How to Run (Discussions)
 
-**Non-private setting** (*Table tab:no_dp* — DP-SAPF at $\varepsilon=\{10, \infty\}$):
+**Non-private setting** (*Table tab:no_dp* — DP-SAPF at $\varepsilon=\infty$):
 
-Run without Gaussian noise injection by setting `[TODO: no-DP flag]`.
+```bash
+bash script-dp-sapf-nodp.sh
+```
 
 **Without fine-tuning** (*Table tab:no_finetuning* — public model zero-shot vs. DP-SAPF fine-tuned):
 
 Generate directly from the pretrained public model without any fine-tuning on sensitive data:
 
 ```bash
-[TODO: command]
+bash script-dp-sapf-noft.sh
 ```
 
 **Transferability** (*Figure fig:dit* — DP-SAPF on DiT and alternative DP mechanisms EM / PTR):
 
+For DiT:
 ```bash
-[TODO: command for DiT backbone]
-[TODO: command for EM / PTR mechanism]
+bash script-dp-sapf-dit.sh
 ```
+
+For EM and PTR:
+
 
 For the transferability figure, please refer to `plot/plot_models_mechanism.py`.
 
-**Computational resources** (*Table tab:computationalResource* — GPU memory and runtime per stage):
-
-The resource comparison uses CIFAR-10 with `Stable-Diffusion-v1-5`. DP-SAPF saves ~11.0% GPU memory and ~9.1% total runtime compared to DP-LoRA by updating fewer parameter matrices (peak memory: 25.8 GB vs. 29.0 GB for DP-LoRA). -->
 
 ### 4.4 Results
 
