@@ -106,7 +106,7 @@ To set up the environment of DP-SAPF, we use `conda` to manage our dependencies.
 
 ```bash
 git clone https://github.com/2019ChenGong/DP-SAPF.git
-cd gap
+cd DP-SAPF
 bash install.sh
 bash install_lora.sh
 ```
