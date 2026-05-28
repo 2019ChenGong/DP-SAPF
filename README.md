@@ -109,6 +109,7 @@ git clone https://github.com/2019ChenGong/DP-SAPF.git
 cd DP-SAPF
 bash install.sh
 bash install_lora.sh
+bash install_dit.sh
 ```
 
 ### 4.2 Prepare Dataset
