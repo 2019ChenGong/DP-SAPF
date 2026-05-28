@@ -1,11 +1,11 @@
 eval "$(conda shell.bash hook)"
-conda activate dplora
+conda activate dplora_dit
 cd dm-lora
 
-subjects="celeba_male_256" # Subject Name
-data_path="../dataset/celeba/train_256_Male.zip"
-sensitive_resolution=256
-INSTANCE_PROMPT="An image of a female face"
+subjects="cifar10_32" # Subject Name
+data_path="../dataset/cifar10/train_32.zip"
+sensitive_resolution=32
+INSTANCE_PROMPT="An image of an airplane."
 MODEL_NAME="Tongyi-MAI/Z-Image"
 
 eps=10.0
