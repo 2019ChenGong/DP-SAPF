@@ -240,7 +240,7 @@ bash scripts/script-dp-sapf-nodp.sh
 Generate directly from the pretrained public model without any fine-tuning on sensitive data:
 
 ```bash
-bash scripts/script-dp-sapf-noft.sh
+bash scripts/script-dp-dit.sh
 ```
 
 **Transferability** (*Figure fig:dit* — DP-SAPF on DiT and alternative DP mechanisms EM / PTR):
