@@ -71,12 +71,12 @@ def load_attn_procs_(self, pretrained_model_name_or_path_or_dict: Union[str, Dic
         AttnAddedKVProcessor,
         AttnAddedKVProcessor2_0,
         CustomDiffusionAttnProcessor,
-        LoRAAttnAddedKVProcessor,
         LoRAXFormersAttnProcessor,
         SlicedAttnAddedKVProcessor,
+        XFormersAttnAddedKVProcessor,
         XFormersAttnProcessor,
     )
-    from attention_processor import LoRAAttnProcessor, LoRAAttnProcessor2_0
+    from attention_processor import LoRAAttnProcessor, LoRAAttnProcessor2_0, LoRAAttnAddedKVProcessor
 
     from diffusers.models.lora import LoRACompatibleConv, LoRACompatibleLinear, LoRAConv2dLayer, LoRALinearLayer
     from krona import KronALinearLayer
@@ -441,12 +441,12 @@ def load_attn_procs(self, pretrained_model_name_or_path_or_dict: Union[str, Dict
         AttnAddedKVProcessor,
         AttnAddedKVProcessor2_0,
         CustomDiffusionAttnProcessor,
-        LoRAAttnAddedKVProcessor,
         LoRAXFormersAttnProcessor,
         SlicedAttnAddedKVProcessor,
+        XFormersAttnAddedKVProcessor,
         XFormersAttnProcessor,
     )
-    from attention_processor import LoRAAttnProcessor, LoRAAttnProcessor2_0
+    from attention_processor import LoRAAttnProcessor, LoRAAttnProcessor2_0, LoRAAttnAddedKVProcessor
 
     from diffusers.models.lora import LoRACompatibleConv, LoRACompatibleLinear, LoRAConv2dLayer, LoRALinearLayer
     from krona import KronALinearLayer  # Note: KronA support remains placeholder
@@ -626,15 +626,17 @@ def load_attn_procs(self, pretrained_model_name_or_path_or_dict: Union[str, Dict
             # ===== DYNAMIC PROJECTION DETECTION FOR ATTENTION PROCESSORS =====
             # Determine processor type for prefix mapping
             is_added_kv = isinstance(
-                attn_processor, (AttnAddedKVProcessor, SlicedAttnAddedKVProcessor, AttnAddedKVProcessor2_0)
+                attn_processor, (AttnAddedKVProcessor, SlicedAttnAddedKVProcessor, AttnAddedKVProcessor2_0, XFormersAttnAddedKVProcessor)
             )
             
-            # Projection prefix mapping based on processor type
+            # Our local LoRAAttnAddedKVProcessor adapts to_q/to_k/to_v/to_out (not add_k_proj/add_v_proj),
+            # so the saved checkpoint always uses the to_*_ prefix — regardless of whether the underlying
+            # attention is AddedKV (IF) or plain cross-attn (SD).
             proj_prefixes = {
-                'k': 'add_k_proj_' if is_added_kv else 'to_k_',
-                'q': 'add_q_proj_' if is_added_kv else 'to_q_',
-                'v': 'add_v_proj_' if is_added_kv else 'to_v_',
-                'o': 'add_out_proj_' if is_added_kv else 'to_out_'
+                'k': 'to_k_',
+                'q': 'to_q_',
+                'v': 'to_v_',
+                'o': 'to_out_',
             }
             
             # Detect which projections exist in this processor's weights

@@ -290,12 +290,116 @@ class LoRAAttnProcessor2_0(nn.Module):
         return hidden_states
 
 
+class LoRAAttnAddedKVProcessor(nn.Module):
+    r"""
+    LoRA processor for attention blocks with `added_kv_proj_dim` (e.g. DeepFloyd IF's
+    SimpleCrossAttn[Down|Up]Block2D). Mirrors diffusers' AttnAddedKVProcessor forward
+    (self-KV via to_k/to_v(hidden_states) + cross-KV via add_k_proj/add_v_proj(
+    encoder_hidden_states), concatenated) but wraps LoRA around to_q/to_k/to_v/to_out
+    per our `attn_update_unet` kwarg — consistent with the local LoRAAttnProcessor.
+    add_k_proj / add_v_proj are left un-adapted (matches SD convention of adapting
+    only the base q/k/v/o projections).
+    """
+
+    def __init__(self, hidden_size, cross_attention_dim=None, rank=4, network_alpha=None,
+            adapter_type=None,
+            attn_update_unet=None,
+            **kwargs,
+        ):
+        super().__init__()
+
+        self.hidden_size = hidden_size
+        self.cross_attention_dim = cross_attention_dim
+        self.rank = rank
+
+        q_rank = kwargs.pop("q_rank", None) or rank
+        v_rank = kwargs.pop("v_rank", None) or rank
+        out_rank = kwargs.pop("out_rank", None) or rank
+
+        self.attn_update_unet = list(attn_update_unet)
+
+        if adapter_type == "lora":
+            if "q" in self.attn_update_unet:
+                self.to_q_lora = LoRALinearLayer(hidden_size, hidden_size, q_rank, network_alpha)
+            if "k" in self.attn_update_unet:
+                # to_k operates on hidden_states (self-attention path), not encoder_hidden_states
+                self.to_k_lora = LoRALinearLayer(hidden_size, hidden_size, rank, network_alpha)
+            if "v" in self.attn_update_unet:
+                self.to_v_lora = LoRALinearLayer(hidden_size, hidden_size, v_rank, network_alpha)
+            if "o" in self.attn_update_unet:
+                self.to_out_lora = LoRALinearLayer(hidden_size, hidden_size, out_rank, network_alpha)
+        elif adapter_type == "krona":
+            raise ValueError("Currently not supported.")
+        else:
+            raise ValueError("Only lora and krona supported.")
+
+    def __call__(self, attn: Attention, hidden_states, encoder_hidden_states=None, attention_mask=None, scale=1.0):
+        residual = hidden_states
+        hidden_states = hidden_states.view(hidden_states.shape[0], hidden_states.shape[1], -1).transpose(1, 2)
+        batch_size, sequence_length, _ = hidden_states.shape
+
+        attention_mask = attn.prepare_attention_mask(attention_mask, sequence_length, batch_size)
+
+        if encoder_hidden_states is None:
+            encoder_hidden_states = hidden_states
+        elif attn.norm_cross:
+            encoder_hidden_states = attn.norm_encoder_hidden_states(encoder_hidden_states)
+
+        hidden_states = attn.group_norm(hidden_states.transpose(1, 2)).transpose(1, 2)
+
+        if "q" in self.attn_update_unet:
+            query = attn.to_q(hidden_states) + scale * self.to_q_lora(hidden_states)
+        else:
+            query = attn.to_q(hidden_states)
+        query = attn.head_to_batch_dim(query)
+
+        # cross-conditioning projections (no LoRA by design)
+        encoder_hidden_states_key_proj = attn.add_k_proj(encoder_hidden_states)
+        encoder_hidden_states_value_proj = attn.add_v_proj(encoder_hidden_states)
+        encoder_hidden_states_key_proj = attn.head_to_batch_dim(encoder_hidden_states_key_proj)
+        encoder_hidden_states_value_proj = attn.head_to_batch_dim(encoder_hidden_states_value_proj)
+
+        if not attn.only_cross_attention:
+            if "k" in self.attn_update_unet:
+                key = attn.to_k(hidden_states) + scale * self.to_k_lora(hidden_states)
+            else:
+                key = attn.to_k(hidden_states)
+            if "v" in self.attn_update_unet:
+                value = attn.to_v(hidden_states) + scale * self.to_v_lora(hidden_states)
+            else:
+                value = attn.to_v(hidden_states)
+            key = attn.head_to_batch_dim(key)
+            value = attn.head_to_batch_dim(value)
+            key = torch.cat([encoder_hidden_states_key_proj, key], dim=1)
+            value = torch.cat([encoder_hidden_states_value_proj, value], dim=1)
+        else:
+            key = encoder_hidden_states_key_proj
+            value = encoder_hidden_states_value_proj
+
+        attention_probs = attn.get_attention_scores(query, key, attention_mask)
+        hidden_states = torch.bmm(attention_probs, value)
+        hidden_states = attn.batch_to_head_dim(hidden_states)
+
+        if "o" in self.attn_update_unet:
+            hidden_states = attn.to_out[0](hidden_states) + scale * self.to_out_lora(hidden_states)
+        else:
+            hidden_states = attn.to_out[0](hidden_states)
+        hidden_states = attn.to_out[1](hidden_states)
+
+        hidden_states = hidden_states.transpose(-1, -2).reshape(residual.shape)
+        hidden_states = hidden_states + residual
+
+        return hidden_states
+
+
 AttentionProcessor = Union[
     LoRAAttnProcessor,
     LoRAAttnProcessor2_0,
+    LoRAAttnAddedKVProcessor,
 ]
 
 LORA_ATTENTION_PROCESSORS = (
     LoRAAttnProcessor,
     LoRAAttnProcessor2_0,
+    LoRAAttnAddedKVProcessor,
 )

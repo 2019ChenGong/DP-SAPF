@@ -136,7 +136,7 @@ dataset/
 Users should first activate the conda environment:
 
 ```bash
-conda activate dpimagebench
+conda activate dplora
 ```
 
 Train DP-SAPF (example: CIFAR-10, 4 GPUs):
@@ -249,7 +249,10 @@ bash script-dp-sapf-dit.sh
 ```
 
 For EM and PTR:
-
+```bash
+bash script-dp-sapf-em.sh
+bash script-dp-sapf-ptr.sh
+```
 
 For the transferability figure, please refer to `plot/plot_models_mechanism.py`.
 

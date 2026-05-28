@@ -42,6 +42,7 @@ from torch.utils.data import Dataset
 from torchvision import transforms
 from tqdm.auto import tqdm
 from transformers import AutoTokenizer, PretrainedConfig
+import json
 
 import diffusers
 from diffusers import (
@@ -69,12 +70,395 @@ from dataset import PEDESDataset, Flickr30kDataset, RocoDataset, FashionDataset,
 from diffusers.optimization import get_scheduler
 from diffusers.utils import check_min_version, is_wandb_available
 from diffusers.utils.import_utils import is_xformers_available
-from fastDP import PrivacyEngine, PrivacyEngine_Distributed_extending
-from opacus.accountants.utils import get_noise_multiplier
+from opacus import PrivacyEngine
 # Will error if the minimal version of diffusers is not installed. Remove at your own risks.
 check_min_version("0.21.0.dev0")
 logger = get_logger(__name__)
 
+
+from collections import defaultdict
+
+# def infer_processor_key_from_param_name(param_name):
+#     """
+#     Convert parameter name like:
+#       'down_blocks.0.attentions.0.transformer_blocks.0.attn1.to_q.weight'
+#     to processor key:
+#       'down_blocks.0.attentions.0.transformer_blocks.0.attn1.processor'
+#     """
+#     if "to_q" in param_name or "to_k" in param_name or "to_v" in param_name or "to_out" in param_name:
+#         # Remove trailing ".weight" or ".bias"
+#         base = param_name.rsplit(".", 1)[0]  # remove .weight
+#         # base is like: down_blocks.0.attentions.0.transformer_blocks.0.attn1.to_q
+#         # Remove the last part (to_q, to_k, etc.)
+#         attn_path = ".".join(base.split(".")[:-1])  # ...attn1
+#         return f"{attn_path}.processor"
+#     return None
+
+# def compute_fisher_for_original_attn(
+#     unet,
+#     vae,
+#     text_encoder,
+#     train_dataloader,
+#     noise_scheduler,
+#     dataloader,
+#     accelerator,
+#     args,
+#     num_batches=20,
+#     weight_dtype=torch.float32,
+#     variation_weight=False,
+# ):
+#     unet.eval()
+#     fisher = defaultdict(float)
+
+#     # We'll map each attention block to its processor name
+#     # e.g., "down_blocks.0.attentions.0" -> ["attn1", "attn2"]
+#     # But easier: collect all attention module names that have to_q, etc.
+#     progress_bar = tqdm(range(num_batches, args.max_train_steps), disable=not accelerator.is_local_main_process)
+#     progress_bar.set_description("Steps")
+
+#     attn_module_names_ = []
+#     for name, attn_processor in unet.attn_processors.items():
+#         if args.fisher_remove_key is None or args.fisher_remove_key not in name:
+#             attn_module_names_.append(name)
+#     if args.random_selection:
+#         for name in attn_module_names_:
+#             fisher[name] = np.random.rand()
+#         return fisher
+#     attn_module_names = []
+#     for name, module in unet.named_modules():
+#         if hasattr(module, "to_q") and hasattr(module, "to_k"):
+#             if accelerator.is_main_process:
+#                 print(name)
+#         attn_module_names.append(name)
+
+#     # Prepare everything with our `accelerator`.
+#     if args.train_text_encoder:
+#         unet, text_encoder, train_dataloader = accelerator.prepare(
+#             unet, text_encoder, train_dataloader
+#         )
+#     else:
+#         unet, train_dataloader = accelerator.prepare(
+#             unet, train_dataloader
+#         )
+
+#     count = 0
+#     for step, batch in enumerate(dataloader):
+#         if step >= num_batches:
+#             break
+
+#         # --- Forward pass (same as your training loop) ---
+#         pixel_values = batch["pixel_values"].to(dtype=weight_dtype, device=accelerator.device)
+#         if vae is not None:
+#             model_input = vae.encode(pixel_values).latent_dist.sample()
+#             model_input = model_input * vae.config.scaling_factor
+#         else:
+#             model_input = pixel_values
+
+#         model_input = model_input.repeat_interleave(args.micro_batch_size, dim=0)
+#         noise = torch.randn_like(model_input)
+#         bsz = model_input.shape[0]
+#         timesteps = torch.randint(0, noise_scheduler.config.num_train_timesteps, (bsz,), device=model_input.device).long()
+#         noisy_model_input = noise_scheduler.add_noise(model_input, noise, timesteps)
+
+#         if args.pre_compute_text_embeddings:
+#             encoder_hidden_states = batch["input_ids"]
+#         else:
+#             encoder_hidden_states = encode_prompt(
+#                 text_encoder,
+#                 batch["input_ids"],
+#                 batch["attention_mask"],
+#                 text_encoder_use_attention_mask=args.text_encoder_use_attention_mask,
+#             )
+#         encoder_hidden_states = encoder_hidden_states.repeat_interleave(args.micro_batch_size, dim=0)
+
+#         if accelerator.unwrap_model(unet).config.in_channels == model_input.shape[1] * 2:
+#             noisy_model_input = torch.cat([noisy_model_input, noisy_model_input], dim=1)
+
+#         class_labels = timesteps if args.class_labels_conditioning == "timesteps" else None
+
+#         # --- Compute loss ---
+#         unet.zero_grad()
+#         model_pred = unet(noisy_model_input, timesteps, encoder_hidden_states, class_labels=class_labels).sample
+
+#         if model_pred.shape[1] == 6:
+#             model_pred, _ = torch.chunk(model_pred, 2, dim=1)
+
+#         if noise_scheduler.config.prediction_type == "epsilon":
+#             target = noise
+#         elif noise_scheduler.config.prediction_type == "v_prediction":
+#             target = noise_scheduler.get_velocity(model_input, noise, timesteps)
+#         else:
+#             raise ValueError(...)
+
+#         loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+#         accelerator.backward(loss)
+
+#         for name, param in unet.named_parameters():
+#             if name.startswith('module.'):
+#                 name = name[7:]
+#             if param.grad is not None:
+#                 # if accelerator.is_main_process:
+#                 #     print((param.grad ** 2).sum())
+#                 # Check if this param belongs to an attention block
+#                 # e.g., "down_blocks.0.attentions.0.transformer_blocks.0.attn1.to_q.weight"
+#                 if any(attn_name in name for attn_name in attn_module_names):
+#                     # Infer the corresponding processor key
+#                     proc_key = infer_processor_key_from_param_name(name)
+#                     if proc_key:
+#                         if proc_key in attn_module_names_:
+#                             continue
+#                 param.grad = None
+
+#         # accelerator.clip_grad_norm_(unet.parameters(), 1.0)
+#         torch.nn.utils.clip_grad_norm_(unet.parameters(), max_norm=args.fisher_norm)
+
+#         last_name = None
+
+#         # --- Accumulate grad^2 for attention parameters ---
+#         for name, param in unet.named_parameters():
+#             if name.startswith('module.'):
+#                 name = name[7:]
+#             # print(name)
+#             if param.grad is not None:
+#                 # if accelerator.is_main_process:
+#                 #     print((param.grad ** 2).sum())
+#                 # Check if this param belongs to an attention block
+#                 # e.g., "down_blocks.0.attentions.0.transformer_blocks.0.attn1.to_q.weight"
+#                 if any(attn_name in name for attn_name in attn_module_names):
+#                     # Infer the corresponding processor key
+#                     print(proc_key)
+#                     proc_key = infer_processor_key_from_param_name(name)
+#                     if proc_key:
+#                         if proc_key in attn_module_names_:
+#                             if proc_key in fisher:
+#                                 if proc_key == last_name:
+#                                     fisher[proc_key][-1] += (param.grad ** 2).sum().item()
+#                                 else:
+#                                     fisher[proc_key].append((param.grad ** 2).sum().item())
+#                             else:
+#                                 fisher[proc_key] = [(param.grad ** 2).sum().item()]
+#                             last_name = proc_key
+
+#         count += 1
+#         progress_bar.update(1)
+
+#     # Normalize
+#     keys = list(fisher.keys())
+#     for k in fisher:
+#         local_tensor = torch.tensor(fisher[k]).to(accelerator.device)
+#         all_tensors = accelerator.gather_for_metrics(local_tensor)
+#         fisher[k] = all_tensors.cpu().tolist()  # if all_tensors is 1D
+#         if accelerator.is_main_process:
+#             print(k, np.sum(fisher[k]))
+#         mean = np.sum(fisher[k]) + np.random.randn() * args.fisher_sigma * args.fisher_norm
+
+#         if keys.index(k) >= len(keys) // 2:
+#             w = args.fisher_weight
+#         else:
+#             w = 1
+#         if variation_weight:
+#             std = np.std(fisher[k])
+#             if accelerator.is_main_process:
+#                 print(k, std)
+#             fisher[k] = mean / std
+#         else:
+#             fisher[k] = mean
+#         fisher[k] *= w
+#         if accelerator.is_main_process:
+#             print(k, fisher[k])
+#     return fisher
+
+
+def infer_fisher_key_from_param_name(param_name):
+    """
+    Convert parameter name like:
+      'down_blocks.0.attentions.0.transformer_blocks.0.attn1.to_q.weight'
+    to fine-grained Fisher key:
+      'down_blocks.0.attentions.0.transformer_blocks.0.attn1.to_q'
+    Returns None if not an attention projection param.
+    """
+    if any(proj in param_name for proj in ["to_q", "to_k", "to_v", "to_out"]):
+        # Remove trailing ".weight" or ".bias"
+        base = param_name.rsplit(".", 1)[0]  # e.g., ...attn1.to_q
+        return base
+    return None
+
+
+def compute_force_scores(
+    unet,
+    vae,
+    text_encoder,
+    train_dataloader,
+    noise_scheduler,
+    dataloader,
+    accelerator,
+    args,
+    num_batches=20,
+    weight_dtype=torch.float32,
+    variation_weight=False,
+):
+    """FORCE: iterative foresight SNIP pruning.
+
+    At each iteration we (1) zero out weights for already-pruned projection keys
+    so their removal actually propagates through the network, (2) compute SNIP
+    sensitivity |w * g| for surviving keys, and (3) prune the lowest-scoring
+    fraction. This gives each key's score in the context of what remains after
+    previous pruning rounds.
+    """
+    unet.eval()
+
+    if args.random_selection:
+        fisher_keys = set()
+        for name, _ in unet.named_parameters():
+            if name.startswith('module.'):
+                name = name[7:]
+            key = infer_fisher_key_from_param_name(name)
+            if key:
+                fisher_keys.add(key)
+        return {key: np.random.rand() for key in fisher_keys}
+
+    if args.train_text_encoder:
+        unet, text_encoder, train_dataloader = accelerator.prepare(
+            unet, text_encoder, train_dataloader
+        )
+    else:
+        unet, train_dataloader = accelerator.prepare(
+            unet, train_dataloader
+        )
+
+    # Pre-build key → param-name list mapping (handles DDP 'module.' prefix)
+    name_to_param = dict(unet.named_parameters())
+    key_to_param_names = defaultdict(list)
+    all_keys = set()
+    for raw_name in name_to_param:
+        clean = raw_name[7:] if raw_name.startswith('module.') else raw_name
+        key = infer_fisher_key_from_param_name(clean)
+        if key:
+            key_to_param_names[key].append(raw_name)
+            all_keys.add(key)
+
+    masks = {key: True for key in all_keys}
+    current_scores = {key: 0.0 for key in all_keys}
+    force_iterations = args.force_iterations
+
+    def _one_snip_pass(active_mask, pb_desc):
+        """Single data pass returning SNIP scores for active keys."""
+        iter_scores = defaultdict(float)
+        progress_bar = tqdm(range(num_batches), disable=not accelerator.is_local_main_process)
+        progress_bar.set_description(pb_desc)
+
+        for step, batch in enumerate(dataloader):
+            if step >= num_batches:
+                break
+
+            pixel_values = batch["pixel_values"].to(dtype=weight_dtype, device=accelerator.device)
+            if vae is not None:
+                model_input = vae.encode(pixel_values).latent_dist.sample()
+                model_input = model_input * vae.config.scaling_factor
+            else:
+                model_input = pixel_values
+
+            model_input = model_input.repeat_interleave(args.micro_batch_size, dim=0)
+            noise = torch.randn_like(model_input)
+            bsz = model_input.shape[0]
+            timesteps = torch.randint(
+                0, noise_scheduler.config.num_train_timesteps, (bsz,), device=model_input.device
+            ).long()
+            noisy_model_input = noise_scheduler.add_noise(model_input, noise, timesteps)
+
+            if args.pre_compute_text_embeddings:
+                encoder_hidden_states = batch["input_ids"]
+            else:
+                encoder_hidden_states = encode_prompt(
+                    text_encoder,
+                    batch["input_ids"],
+                    batch["attention_mask"],
+                    text_encoder_use_attention_mask=args.text_encoder_use_attention_mask,
+                )
+            encoder_hidden_states = encoder_hidden_states.repeat_interleave(args.micro_batch_size, dim=0)
+
+            if accelerator.unwrap_model(unet).config.in_channels == model_input.shape[1] * 2:
+                noisy_model_input = torch.cat([noisy_model_input, noisy_model_input], dim=1)
+
+            class_labels = timesteps if args.class_labels_conditioning == "timesteps" else None
+
+            unet.zero_grad()
+            model_pred = unet(noisy_model_input, timesteps, encoder_hidden_states, class_labels=class_labels).sample
+
+            if model_pred.shape[1] == 6:
+                model_pred, _ = torch.chunk(model_pred, 2, dim=1)
+
+            if noise_scheduler.config.prediction_type == "epsilon":
+                target = noise
+            elif noise_scheduler.config.prediction_type == "v_prediction":
+                target = noise_scheduler.get_velocity(model_input, noise, timesteps)
+            else:
+                raise ValueError(f"Unknown prediction type: {noise_scheduler.config.prediction_type}")
+
+            loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
+            accelerator.backward(loss)
+            torch.nn.utils.clip_grad_norm_(unet.parameters(), max_norm=args.fisher_norm)
+
+            for raw_name, param in unet.named_parameters():
+                clean = raw_name[7:] if raw_name.startswith('module.') else raw_name
+                if param.grad is not None:
+                    fisher_key = infer_fisher_key_from_param_name(clean)
+                    if fisher_key is not None and active_mask.get(fisher_key, False):
+                        iter_scores[fisher_key] += (param.data * param.grad).abs().sum().item()
+
+            progress_bar.update(1)
+
+        return iter_scores
+
+    # Iterative FORCE loop
+    for force_iter in range(force_iterations):
+        # Zero weights for pruned keys so their removal propagates through the network
+        saved = {}
+        for key, active in masks.items():
+            if not active:
+                for pname in key_to_param_names[key]:
+                    saved[pname] = name_to_param[pname].data.clone()
+                    name_to_param[pname].data.zero_()
+
+        current_scores = _one_snip_pass(
+            masks, f"FORCE iter {force_iter + 1}/{force_iterations}"
+        )
+
+        # Restore zeroed weights
+        for pname, data in saved.items():
+            name_to_param[pname].data.copy_(data)
+
+        # Geometric pruning schedule: after all iterations keep top_k_lora fraction
+        if force_iter < force_iterations - 1:
+            active_keys = [k for k in all_keys if masks[k]]
+            target_keep = max(1, int(len(all_keys) * args.top_k_lora ** ((force_iter + 1) / force_iterations)))
+            num_to_prune = max(0, len(active_keys) - target_keep)
+            if num_to_prune > 0:
+                sorted_active = sorted(active_keys, key=lambda k: current_scores.get(k, 0.0))
+                for key in sorted_active[:num_to_prune]:
+                    masks[key] = False
+
+    # --- Gather across processes and post-process ---
+    keys_sorted = sorted(all_keys)
+    final_scores = {}
+    for k in keys_sorted:
+        local_val = torch.tensor(current_scores.get(k, 0.0), device=accelerator.device)
+        gathered_vals = accelerator.gather(local_val)
+        total_val = gathered_vals.sum().cpu().item()
+
+        total_val += np.random.randn() * args.fisher_sigma * args.fisher_norm
+        w = args.fisher_weight if keys_sorted.index(k) >= len(keys_sorted) // 2 else 1.0
+        final_scores[k] = total_val * w
+
+        if accelerator.is_main_process:
+            print(f"{k}: {final_scores[k]}")
+
+    # Pruned keys get score 0 so they sort to the bottom
+    for key in all_keys:
+        if key not in final_scores:
+            final_scores[key] = 0.0
+
+    return final_scores
 
 def save_model_card(
     repo_id: str,
@@ -783,6 +1167,27 @@ def parse_args(input_args=None):
     )
 
     parser.add_argument(
+        "--fisher_save_dir",
+        type=str,
+        default=None,
+        help="Details about attention matrix (k, q, v, o)",
+    )
+
+    parser.add_argument(
+        "--fisher_save_name",
+        type=str,
+        default="tuning_layers.json",
+        help="Details about attention matrix (k, q, v, o)",
+    )
+
+    parser.add_argument(
+        "--fisher_remove_key",
+        type=str,
+        default=None,
+        help="Details about attention matrix (k, q, v, o)",
+    )
+
+    parser.add_argument(
         "--attn_update_text",
         type=str,
         default=None,
@@ -811,16 +1216,61 @@ def parse_args(input_args=None):
     )
 
     parser.add_argument(
-        "--attn_keywords",
-        type=str,
-        default='attn',
+        "--top_k_lora",
+        type=float,
+        default=0.5,
         help="Details about attention matrix (k, q, v, o)",
     )
 
     parser.add_argument(
-        "--remove_attn_keywords",
+        "--fisher_num_batches",
+        type=int,
+        default=10,
+        help="Details about attention matrix (k, q, v, o)",
+    )
+
+    parser.add_argument(
+        "--fisher_sigma",
+        type=float,
+        default=5,
+        help="Details about attention matrix (k, q, v, o)",
+    )
+
+    parser.add_argument(
+        "--fisher_weight",
+        type=float,
+        default=1,
+        help="Details about attention matrix (k, q, v, o)",
+    )
+
+    parser.add_argument(
+        "--fisher_norm",
+        type=float,
+        default=1,
+        help="Details about attention matrix (k, q, v, o)",
+    )
+
+    parser.add_argument("--variation_weight", 
+        action="store_true", 
+        help="Whether or not to push the model to the GDrive.",
+    )
+
+    parser.add_argument("--random_selection",
+        action="store_true",
+        help="Whether or not to push the model to the GDrive.",
+    )
+
+    parser.add_argument(
+        "--force_iterations",
+        type=int,
+        default=10,
+        help="Number of iterative pruning rounds for FORCE scoring.",
+    )
+
+    parser.add_argument(
+        "--attn_keywords",
         type=str,
-        default=None,
+        default='attn',
         help="Details about attention matrix (k, q, v, o)",
     )
 
@@ -834,34 +1284,6 @@ def parse_args(input_args=None):
         help="Whether low rank parameterized format is there or not.",
     )
 
-    parser.add_argument(
-        "--fisher_batch_size",
-        type=int,
-        default=None,
-        help="Details about attention matrix (k, q, v, o)",
-    )
-
-    parser.add_argument(
-        "--fisher_num",
-        type=int,
-        default=1,
-        help="Details about attention matrix (k, q, v, o)",
-    )
-
-    parser.add_argument(
-        "--fisher_sigma",
-        type=float,
-        default=None,
-        help="Details about attention matrix (k, q, v, o)",
-    )
-
-    parser.add_argument(
-        "--pretrain_model",
-        type=str,
-        default=None,
-        help="Details about attention matrix (k, q, v, o)",
-    )
-
     parser.add_argument("--unet_tune_mlp",
         action="store_true",
         help="Whether we are finetuning MLP layers as well.",
@@ -869,6 +1291,12 @@ def parse_args(input_args=None):
     parser.add_argument("--text_tune_mlp",
         action="store_true",
         help="Whether we are finetuning MLP layers as well.",
+    )
+    parser.add_argument(
+        "--pretrain_model",
+        type=str,
+        default=None,
+        help="Details about attention matrix (k, q, v, o)",
     )
 
     if input_args is not None:
@@ -991,7 +1419,8 @@ def main(args):
         gradient_accumulation_plugin=plugin,
     )
 
-    args.output_dir = struct_output(args, accelerator) # structure the output folder
+    if accelerator.is_main_process:
+        args.output_dir = struct_output(args, accelerator) # structure the output folder
 
     # Currently, it's not possible to do gradient accumulation when training two models with accelerate.accumulate
     # This will be enabled soon in accelerate. For now, we don't allow gradient accumulation when training two models.
@@ -1061,16 +1490,15 @@ def main(args):
         args.pretrained_model_name_or_path, subfolder="unet", revision=args.revision
     )
 
-    if args.pretrain_model is not None:
-        lora_state_dict, network_alphas = LoraLoaderMixin.lora_state_dict(args.pretrain_model)
-        LoraLoaderMixin.load_lora_into_unet(lora_state_dict, network_alphas=network_alphas, unet=unet)
-        unet.fuse_lora()
-
     # We only train the additional adapter LoRA layers
     if vae is not None:
         vae.requires_grad_(False)
     text_encoder.requires_grad_(False)
     unet.requires_grad_(False)
+
+    for name, param in unet.named_parameters():
+        if 'attn' in name:
+            param.requires_grad_(True)  # Enable for Fisher computation
 
     # For mixed precision training we cast all non-trainable weigths (vae, non-lora text_encoder and non-lora unet) to half-precision
     # as these weights are only used for inference, keeping weights in full precision is not required.
@@ -1085,6 +1513,11 @@ def main(args):
     if vae is not None:
         vae.to(accelerator.device, dtype=weight_dtype)
     text_encoder.to(accelerator.device, dtype=weight_dtype)
+
+    if args.pretrain_model is not None:
+        lora_state_dict, network_alphas = LoraLoaderMixin.lora_state_dict(args.pretrain_model)
+        LoraLoaderMixin.load_lora_into_unet(lora_state_dict, network_alphas=network_alphas, unet=unet)
+        unet.fuse_lora()
 
     if args.enable_xformers_memory_efficient_attention:
         if is_xformers_available():
@@ -1103,225 +1536,16 @@ def main(args):
         unet.enable_gradient_checkpointing()
         if args.train_text_encoder:
             text_encoder.gradient_checkpointing_enable()
-    
-    import json
-    if args.attn_keywords.endswith('json'):
-        with open(os.path.join(args.output_dir, args.attn_keywords), "r") as f:
-            args.attn_keywords = json.load(f)
-
-    # Set correct lora layers
-    unet_lora_attn_procs = {}
-    unet_lora_parameters = []
-    for name, attn_processor in unet.attn_processors.items():
-        cross_attention_dim = None if name.endswith("attn1.processor") else unet.config.cross_attention_dim
-        if name.startswith("mid_block"):
-            hidden_size = unet.config.block_out_channels[-1]
-        elif name.startswith("up_blocks"):
-            block_id = int(name[len("up_blocks.")])
-            hidden_size = list(reversed(unet.config.block_out_channels))[block_id]
-        elif name.startswith("down_blocks"):
-            block_id = int(name[len("down_blocks.")])
-            hidden_size = unet.config.block_out_channels[block_id]
-
-        if isinstance(attn_processor, (AttnAddedKVProcessor, SlicedAttnAddedKVProcessor, AttnAddedKVProcessor2_0)):
-            lora_attn_processor_class = LoRAAttnAddedKVProcessor
-            print("xxxxxxxxxxx")
-        else:
-            # print(hasattr(F, "scaled_dot_product_attention"))
-            lora_attn_processor_class = (
-                LoRAAttnProcessor2_0 if hasattr(F, "scaled_dot_product_attention") else LoRAAttnProcessor
-            )
-        
-        if(args.adapter_type=="lora"):
-            if type(args.attn_keywords) == dict and name in args.attn_keywords and type(args.attn_keywords[name]) == list:
-                attn_update_unet = args.attn_keywords[name]
-                module = lora_attn_processor_class(
-                    hidden_size=hidden_size, 
-                    cross_attention_dim=cross_attention_dim, 
-                    adapter_type=args.adapter_type, # added 
-                    attn_update_unet=attn_update_unet, # added 
-                    k_rank=args.unet_lora_rank_k if "k" in args.attn_update_unet else None, # k rank
-                    q_rank=args.unet_lora_rank_q if "q" in args.attn_update_unet else None, # added 
-                    v_rank=args.unet_lora_rank_v if "v" in args.attn_update_unet else None, # added 
-                    out_rank=args.unet_lora_rank_out if "o" in args.attn_update_unet else None, # added 
-                )
-            else:
-                module = lora_attn_processor_class(
-                    hidden_size=hidden_size, 
-                    cross_attention_dim=cross_attention_dim, 
-                    adapter_type=args.adapter_type, # added 
-                    attn_update_unet=args.attn_update_unet, # added 
-                    k_rank=args.unet_lora_rank_k if "k" in args.attn_update_unet else None, # k rank
-                    q_rank=args.unet_lora_rank_q if "q" in args.attn_update_unet else None, # added 
-                    v_rank=args.unet_lora_rank_v if "v" in args.attn_update_unet else None, # added 
-                    out_rank=args.unet_lora_rank_out if "o" in args.attn_update_unet else None, # added 
-                )
-        else:
-            raise AttributeError(f"{args.adapter_type} is not supported.")
-        if type(args.attn_keywords) == str:
-            if args.attn_keywords in name and (args.remove_attn_keywords is None or args.remove_attn_keywords not in name):
-                unet_lora_parameters.extend(module.parameters())
-                if accelerator.is_main_process:
-                    print(args.attn_keywords, name)
-            else:
-                module.requires_grad_(False)
-        elif type(args.attn_keywords) == list:
-            if name in args.attn_keywords:
-                unet_lora_parameters.extend(module.parameters())
-                if accelerator.is_main_process:
-                    print('-', name)
-            else:
-                module.requires_grad_(False)
-        elif type(args.attn_keywords) == dict:
-            if name in args.attn_keywords and (args.remove_attn_keywords is None or args.remove_attn_keywords not in name):
-                if accelerator.is_main_process:
-                    print('-', name)
-                unet_lora_parameters.extend(module.parameters())
-            else:
-                module.requires_grad_(False)
-        unet_lora_attn_procs[name] = module
-
-    unet.set_attn_processor(unet_lora_attn_procs)
-    if(args.unet_tune_mlp):
-        if args.adapter_type=="lora": lora_mlp_rank=args.unet_lora_rank_mlp
-        elif args.adapter_type=="krona": lora_mlp_rank=(args.krona_unet_ffn_rank_a1, args.krona_unet_ffn_rank_a2)
-        else: raise AttributeError("wrong adapter type")
-        ffn_info, unet_lora_extended_parameters = unet.set_ffn_processors(adapter_type=args.adapter_type,
-            lora_mlp_rank=lora_mlp_rank,
-        )
-        unet_lora_parameters.extend(unet_lora_extended_parameters)
-    
-
-    # The text encoder comes from 🤗 transformers, so we cannot directly modify it.
-    # So, instead, we monkey-patch the forward calls of its attention-blocks.
-    if args.train_text_encoder:
-        # ensure that dtype is float32, even if rest of the model that isn't trained is loaded in fp16    
-        if args.adapter_type=="lora":
-            text_lora_parameters = LoraLoaderMixin._modify_text_encoder(
-                text_encoder, dtype=torch.float32, adapter_type=args.adapter_type, attn_update_text=args.attn_update_text,
-                rank_k=args.text_lora_rank_k if "k" in args.attn_update_text else None, # added 
-                rank_q=args.text_lora_rank_q if "q" in args.attn_update_text else None, # added
-                rank_v=args.text_lora_rank_v if "v" in args.attn_update_text else None, # added 
-                rank_o=args.text_lora_rank_out if "o" in args.attn_update_text else None, # added
-                rank_mlp=args.text_lora_rank_mlp if args.text_tune_mlp else None, # added
-                patch_mlp=args.text_tune_mlp,
-            )
-        elif args.adapter_type=="krona":
-            text_lora_parameters = LoraLoaderMixin._modify_text_encoder(
-                text_encoder, dtype=torch.float32, adapter_type=args.adapter_type, attn_update_text=args.attn_update_text,
-                rank_k=(args.krona_text_k_rank_a1, args.krona_text_k_rank_a2) if "k" in args.attn_update_text else None, # added 
-                rank_q=(args.krona_text_q_rank_a1, args.krona_text_q_rank_a2) if "q" in args.attn_update_text else None, # added
-                rank_v=(args.krona_text_v_rank_a1, args.krona_text_v_rank_a2) if "v" in args.attn_update_text else None, # added 
-                rank_o=(args.krona_text_o_rank_a1, args.krona_text_o_rank_a2) if "o" in args.attn_update_text else None, # added
-            )
-
-    # create custom saving & loading hooks so that `accelerator.save_state(...)` serializes in a nice format
-    def save_model_hook(models, weights, output_dir):
-        # there are only two options here. Either are just the unet attn processor layers
-        # or there are the unet and text encoder atten layers
-        unet_lora_layers_to_save = None
-        text_encoder_lora_layers_to_save = None
-
-        for model in models:
-            if isinstance(model, type(accelerator.unwrap_model(unet))):
-                unet_lora_layers_to_save = unet_attn_processors_state_dict(model)
-                if(args.unet_tune_mlp): # added 
-                    unet_lora_layers_to_save_ffn = unet_ffn_within_attn_processors_state_dict(unet)
-                    unet_lora_layers_to_save.update(unet_lora_layers_to_save_ffn) # added 
-            elif isinstance(model, type(accelerator.unwrap_model(text_encoder))):
-                text_encoder_lora_layers_to_save = text_encoder_lora_state_dict(model, attn_update_text=args.attn_update_text)
-            else:
-                raise ValueError(f"unexpected save model: {model.__class__}")
-
-            # make sure to pop weight so that corresponding model is not saved again
-            weights.pop()
-
-        LoraLoaderMixin.save_lora_weights(
-            output_dir,
-            unet_lora_layers=unet_lora_layers_to_save,
-            text_encoder_lora_layers=text_encoder_lora_layers_to_save,
-        )
-
-    def load_model_hook(models, input_dir):
-        unet_ = None
-        text_encoder_ = None
-
-        while len(models) > 0:
-            model = models.pop()
-
-            if isinstance(model, type(accelerator.unwrap_model(unet))):
-                unet_ = model
-            elif isinstance(model, type(accelerator.unwrap_model(text_encoder))):
-                text_encoder_ = model
-            else:
-                raise ValueError(f"unexpected save model: {model.__class__}")
-
-        lora_state_dict, network_alphas = LoraLoaderMixin.lora_state_dict(input_dir)
-        LoraLoaderMixin.load_lora_into_unet(lora_state_dict, network_alphas=network_alphas, unet=unet_,
-            adapter_type=args.adapter_type, # Added
-            attn_update_unet=args.attn_update_unet, # Added
-        )
-        LoraLoaderMixin.load_lora_into_text_encoder(
-            lora_state_dict, network_alphas=network_alphas, text_encoder=text_encoder_,
-            adapter_type=args.adapter_type, # Added
-            attn_update_text=args.attn_update_text, # Added
-        )
-
-    accelerator.register_save_state_pre_hook(save_model_hook)
-    accelerator.register_load_state_pre_hook(load_model_hook)
 
     # Enable TF32 for faster training on Ampere GPUs,
     # cf https://pytorch.org/docs/stable/notes/cuda.html#tensorfloat-32-tf32-on-ampere-devices
     if args.allow_tf32:
         torch.backends.cuda.matmul.allow_tf32 = True
 
-    args.train_batch_size = int(args.train_batch_size / args.gradient_accumulation_steps / accelerator.num_processes)
     if args.scale_lr:
         args.learning_rate = (
             args.learning_rate * args.gradient_accumulation_steps * args.train_batch_size * accelerator.num_processes
         )
-
-    # Use 8-bit Adam for lower memory usage or to fine-tune the model in 16GB GPUs
-    if args.use_8bit_adam:
-        try:
-            import bitsandbytes as bnb
-        except ImportError:
-            raise ImportError(
-                "To use 8-bit Adam, please install the bitsandbytes library: `pip install bitsandbytes`."
-            )
-
-        optimizer_class = bnb.optim.AdamW8bit
-    else:
-        optimizer_class = torch.optim.AdamW
-
-    text_lr = (
-        args.learning_rate
-        if args.learning_rate_text is None
-        else args.learning_rate_text
-    )
-
-    params_to_optimize = (
-        [
-            {
-                "params": itertools.chain(unet_lora_parameters), 
-                "lr": args.learning_rate
-            },
-            {
-                "params": itertools.chain(text_lora_parameters),
-                "lr": text_lr,
-            },
-        ]
-        if args.train_text_encoder
-        else itertools.chain(unet_lora_parameters)
-    )
-
-    optimizer = optimizer_class(
-        params_to_optimize,
-        lr=args.learning_rate,
-        betas=(args.adam_beta1, args.adam_beta2),
-        weight_decay=args.adam_weight_decay,
-        eps=args.adam_epsilon,
-    )
 
     if args.instance_prompt != '':
         args.validation_prompt = args.instance_prompt
@@ -1346,6 +1570,7 @@ def main(args):
         }
 
         return batch
+    
     train_dataset = BenchDataset(
         name=args.instance_data_dir,
         path=args.bench_path,
@@ -1365,321 +1590,75 @@ def main(args):
     num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
     total_batch_size = args.train_batch_size * accelerator.num_processes * args.gradient_accumulation_steps
     args.num_train_epochs = math.ceil(args.max_train_steps / num_update_steps_per_epoch)
+    
+    # ====== NEW: Compute Fisher Info ======
+    # if accelerator.is_main_process:
+    top_k_lora = args.top_k_lora
+    fisher_num_batches = args.fisher_num_batches // accelerator.num_processes
+    print("🔍 Computing FORCE scores for attention layers...")
 
-    lr_scheduler = get_scheduler(
-        args.lr_scheduler,
-        optimizer=optimizer,
-        num_warmup_steps=args.lr_warmup_steps,
-        num_training_steps=args.max_train_steps,
-        num_cycles=args.lr_num_cycles,
-        power=args.lr_power,
+    fisher_scores = compute_force_scores(
+        unet=unet,
+        vae=vae,
+        text_encoder=text_encoder,
+        train_dataloader=train_dataloader,
+        noise_scheduler=noise_scheduler,
+        dataloader=train_dataloader,
+        accelerator=accelerator,
+        args=args,
+        num_batches=fisher_num_batches,
+        weight_dtype=weight_dtype,
+        variation_weight=args.variation_weight,
     )
 
-    if args.eps is not None:
-        privacy_engine = PrivacyEngine_Distributed_extending(
-            unet,
-            batch_size=total_batch_size,
-            grad_accum_steps=args.gradient_accumulation_steps,
-            per_device_physical_batch_size=args.train_batch_size,
-            sample_size=len(train_dataset),
-            num_steps=args.total_steps,
-            target_epsilon=args.eps,
-            target_delta=1/(len(train_dataset) * np.log(len(train_dataset))),
-            clipping_fn='automatic',
-            clipping_mode='MixOpt',
-            origin_params=None,
-            clipping_style='all-layer',
-            num_GPUs=accelerator.num_processes,
-            torch_seed_is_fixed=True,
-            micro_batch_size=args.micro_batch_size,
-        )
-        if accelerator.num_processes == 1:
-            privacy_engine.attach(optimizer)
-        privacy_engine.noise_multiplier = get_noise_multiplier(target_epsilon=args.eps, target_delta=1/(len(train_dataset) * np.log(len(train_dataset))), sample_rate=total_batch_size/len(train_dataset), steps=args.total_steps, accountant="prv", account_history=None if args.fisher_batch_size is None else [(args.fisher_sigma, min(args.fisher_batch_size/len(train_dataset), 1.0), args.fisher_num)])
-        if accelerator.is_main_process:
-            logger.info(f"Noise injected: {privacy_engine.noise_multiplier} --> averaged by batch size: {privacy_engine.effective_noise_multiplier}")
-
-    # Prepare everything with our `accelerator`.
-    if args.train_text_encoder:
-        unet, text_encoder, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-            unet, text_encoder, optimizer, train_dataloader, lr_scheduler
-        )
-    else:
-        unet, optimizer, train_dataloader, lr_scheduler = accelerator.prepare(
-            unet, optimizer, train_dataloader, lr_scheduler
-        )
-    
-    num_update_steps_per_epoch = math.ceil(len(train_dataloader) / args.gradient_accumulation_steps)
-    args.num_train_epochs = math.ceil(args.max_train_steps / num_update_steps_per_epoch)
-
-    # We need to initialize the trackers we use, and also store our configuration.
-    # The trackers initializes automatically on the main process.
-    # if accelerator.is_main_process:
-    #     tracker_config = vars(copy.deepcopy(args))
-    #     tracker_config.pop("validation_images")
-    #     accelerator.init_trackers("dreambooth-lora", config=tracker_config)
-
-    # Train!
-
-    logger.info("***** Running training *****")
-    logger.info(f"  Num examples = {len(train_dataset)}")
-    logger.info(f"  Num batches each epoch = {len(train_dataloader)}")
-    logger.info(f"  Num Epochs = {args.num_train_epochs}")
-    logger.info(f"  Instantaneous batch size per device = {args.train_batch_size}")
-    logger.info(f"  Total train batch size (w. parallel, distributed & accumulation) = {total_batch_size}")
-    logger.info(f"  Gradient Accumulation steps = {args.gradient_accumulation_steps}")
-    logger.info(f"  Total optimization steps = {args.max_train_steps}")
-    global_step = 0
-    first_epoch = 0
-    
-    # count numbr of parameters
-    num_params = sum(p.numel() for p in unet.parameters() if p.requires_grad)
-    if(args.train_text_encoder):
-        num_params_text = sum(p.numel() for p in text_encoder.parameters() if p.requires_grad)
-    else: num_params_text = 0
-
-    logger.info(f"  Total learnable parameters: {num_params + num_params_text}\n") # number of parameters
-
-    # Only show the progress bar once on each machine.
-    progress_bar = tqdm(range(global_step, args.max_train_steps), disable=not accelerator.is_local_main_process)
-    progress_bar.set_description("Steps")
-
+    # After computing fisher_scores (which now maps '...to_q' -> score)
     if accelerator.is_main_process:
-        if args.validation_prompt is not None:
-            visualization(accelerator, args, unet, text_encoder, weight_dtype, global_step)
+        # Step 1: Sort all fine-grained keys by Fisher score
+        sorted_items = sorted(fisher_scores.items(), key=lambda x: x[1], reverse=True)
+        total_num = len(sorted_items)
+        top_k_count = int(top_k_lora * total_num)
+        top_k_fine_grained = set(name for name, _ in sorted_items[:top_k_count])
 
-    for epoch in range(first_epoch, args.num_train_epochs*2):
-        unet.train()
-        if args.train_text_encoder:
-            text_encoder.train()
-            # set top parameter requires_grad = True for gradient checkpointing works
-            text_encoder.text_model.embeddings.requires_grad_(True)
-        
-        train_loss = []
-        for step, batch in enumerate(train_dataloader):
+        # Step 2: Group by attention module base (e.g., ...attn1)
+        selected_attn_modules = defaultdict(list)
+        for full_key in top_k_fine_grained:
+            # Split into base and projection
+            # if 'to_out' in full_key:
+            #     full_key = full_key[:-2]
+            parts = full_key.split(".")
+            if any(proj in parts[-1] for proj in ["to_q", "to_k", "to_v", "to_out"]):
+                proj_name = parts[-1][3:][:1]
+                base_path = ".".join(parts[:-1]) + '.processor'  # e.g., ...attn1
+                selected_attn_modules[base_path].append(proj_name)
 
-            with accelerator.accumulate(unet):
-                pixel_values = batch["pixel_values"].to(dtype=weight_dtype)
+        # Optional: sort projections for consistent output
+        selected_attn_modules = {
+            k: sorted(v) for k, v in selected_attn_modules.items()
+        }
 
-                if vae is not None:
-                    # Convert images to latent space
-                    model_input = vae.encode(pixel_values).latent_dist.sample()
-                    model_input = model_input * vae.config.scaling_factor
-                else:
-                    model_input = pixel_values
-
-                model_input = model_input.repeat_interleave(args.micro_batch_size, dim=0)
-                # Sample noise that we'll add to the latents
-                noise = torch.randn_like(model_input)
-                bsz, channels, height, width = model_input.shape
-                # Sample a random timestep for each image
-                timesteps = torch.randint(
-                    0, noise_scheduler.config.num_train_timesteps, (bsz,), device=model_input.device
-                )
-                timesteps = timesteps.long()
-
-                # Add noise to the model input according to the noise magnitude at each timestep
-                # (this is the forward diffusion process)
-                noisy_model_input = noise_scheduler.add_noise(model_input, noise, timesteps)
-
-                # Get the text embedding for conditioning
-                if args.pre_compute_text_embeddings:
-                    encoder_hidden_states = batch["input_ids"]
-                else:
-                    encoder_hidden_states = encode_prompt(
-                        text_encoder,
-                        batch["input_ids"],
-                        batch["attention_mask"],
-                        text_encoder_use_attention_mask=args.text_encoder_use_attention_mask,
-                    )
-                encoder_hidden_states = encoder_hidden_states.repeat_interleave(args.micro_batch_size, dim=0)
-
-                if accelerator.unwrap_model(unet).config.in_channels == channels * 2:
-                    noisy_model_input = torch.cat([noisy_model_input, noisy_model_input], dim=1)
-
-                if args.class_labels_conditioning == "timesteps":
-                    class_labels = timesteps
-                else:
-                    class_labels = None
-
-                # Predict the noise residual
-                model_pred = unet(
-                    noisy_model_input, timesteps, encoder_hidden_states, class_labels=class_labels
-                ).sample
-
-                # if model predicts variance, throw away the prediction. we will only train on the
-                # simplified training objective. This means that all schedulers using the fine tuned
-                # model must be configured to use one of the fixed variance variance types.
-                if model_pred.shape[1] == 6:
-                    model_pred, _ = torch.chunk(model_pred, 2, dim=1)
-
-                # Get the target for loss depending on the prediction type
-                if noise_scheduler.config.prediction_type == "epsilon":
-                    target = noise
-                elif noise_scheduler.config.prediction_type == "v_prediction":
-                    target = noise_scheduler.get_velocity(model_input, noise, timesteps)
-                else:
-                    raise ValueError(f"Unknown prediction type {noise_scheduler.config.prediction_type}")
-
-                loss = F.mse_loss(model_pred.float(), target.float(), reduction="mean")
-                train_loss.append(loss.item())
-
-                accelerator.backward(loss)
-                if accelerator.sync_gradients:
-                    if accelerator.is_main_process:
-                        logger.info(f"sample num: {model_input.shape[0]//args.micro_batch_size} step: {step}")
-                    # params_to_clip = (
-                    #     itertools.chain(unet_lora_parameters, text_lora_parameters)
-                    #     if args.train_text_encoder
-                    #     else unet_lora_parameters
-                    # )
-                    # accelerator.clip_grad_norm_(params_to_clip, args.max_grad_norm)
-
-                    def get_params():
-                        return itertools.chain(unet_lora_parameters, text_lora_parameters) if args.train_text_encoder else unet_lora_parameters
-                    if args.eps is not None:
-                        cos_sims = []
-                        for param in get_params():
-                            if param.grad is not None:
-
-                                if accelerator.is_main_process:
-                                    noise = torch.randn_like(param.grad) * privacy_engine.noise_multiplier
-                                    param.grad += noise
-                                    cos_sim = torch.nn.functional.cosine_similarity(param.grad.flatten(), (param.grad - noise).flatten(), dim=0)
-                                    cos_sims.append(cos_sim.item())
-                        if accelerator.is_main_process:
-                            cos_sims = sum(cos_sims) / len(cos_sims)
-                            logger.info(f"Cosine similarity: {cos_sims:.4f}")
-
-                    accelerator.clip_grad_norm_(get_params(), args.max_grad_norm)
-                optimizer.step()
-                lr_scheduler.step()
-                optimizer.zero_grad()
-
-            # Checks if the accelerator has performed an optimization step behind the scenes
-            if accelerator.sync_gradients:
-                progress_bar.update(1)
-                global_step += 1
-
-                if accelerator.is_main_process:
-                    if global_step % args.checkpointing_steps == 0:
-                        visualization(accelerator, args, unet, text_encoder, weight_dtype, global_step)
-
-            logs = {"loss": loss.detach().item(), "lr": lr_scheduler.get_last_lr()[0]}
-            progress_bar.set_postfix(**logs)
-            accelerator.log(logs, step=global_step)
-
-            if global_step >= args.max_train_steps:
-                break
-        if global_step >= args.max_train_steps:
-                break
-
-        if accelerator.is_main_process:
-            if args.validation_prompt is not None and epoch % args.validation_epochs == 0:
-                visualization(accelerator, args, unet, text_encoder, weight_dtype, global_step)
-                logger.info(f"Average training loss {sum(train_loss)/len(train_loss)}")
-
-    # Save the lora layers
-    accelerator.wait_for_everyone()
-    if accelerator.is_main_process:
-        unet = accelerator.unwrap_model(unet)
-        unet = unet.to(torch.float32)
-        unet_lora_layers = unet_attn_processors_state_dict(unet)
-
-        if(args.unet_tune_mlp): 
-            unet_lora_layers_ffn = unet_ffn_within_attn_processors_state_dict(unet)
-            unet_lora_layers.update(unet_lora_layers_ffn)
-        
-        if text_encoder is not None and args.train_text_encoder:
-            text_encoder = accelerator.unwrap_model(text_encoder)
-            text_encoder = text_encoder.to(torch.float32)
-            text_encoder_lora_layers = text_encoder_lora_state_dict(text_encoder, attn_update_text=args.attn_update_text)
+        # Step 3: Save as structured JSON
+        if args.fisher_save_dir is None:
+            save_path = os.path.join(args.output_dir, args.fisher_save_name)
         else:
-            text_encoder_lora_layers = None
+            save_path = os.path.join(args.fisher_save_dir, args.fisher_save_name)
+        with open(save_path, "w") as f:
+            json.dump(selected_attn_modules, f, indent=2)
 
-        LoraLoaderMixin.save_lora_weights(
-            save_directory=args.output_dir,
-            unet_lora_layers=unet_lora_layers,
-            text_encoder_lora_layers=text_encoder_lora_layers,
-        )
-
+        print(f"✅ Selected top-{top_k_lora * 100:.1f}% ({len(top_k_fine_grained)} / {total_num}) projection layers for LoRA:")
+        for base, projs in sorted(selected_attn_modules.items()):
+            print(f"  - {base}: [{', '.join(projs)}]")
+    # Get top-K layer names
+    # if accelerator.is_main_process:
+    #     sorted_items = sorted(fisher_scores.items(), key=lambda x: x[1], reverse=True)
+    #     top_k_names = set(name for name, _ in sorted_items[:int(top_k_lora*len(sorted_items))])
+    #     with open(os.path.join(args.output_dir, args.fisher_save_name), "w") as f:
+    #         json.dump(sorted(top_k_names), f, indent=2)
+    #     print(f"✅ Selected top-{top_k_lora} layers for LoRA:")
+    #     for name in sorted(top_k_names):
+    #         print(f"  - {name}")
 
     accelerator.end_training()
 
-
-def visualization(accelerator, args, unet, text_encoder, weight_dtype, global_step):
-    logger.info(
-        f"Running validation... \n Generating {args.num_validation_images} images with prompt:"
-        f" {args.validation_prompt}."
-    )
-    # create pipeline
-    pipeline = DiffusionPipeline.from_pretrained(
-        args.pretrained_model_name_or_path,
-        unet=accelerator.unwrap_model(unet),
-        text_encoder=None if args.pre_compute_text_embeddings else accelerator.unwrap_model(text_encoder),
-        revision=args.revision,
-        torch_dtype=weight_dtype,
-    )
-
-    # We train on the simplified learning objective. If we were previously predicting a variance, we need the scheduler to ignore it
-    scheduler_args = {}
-
-    if "variance_type" in pipeline.scheduler.config:
-        variance_type = pipeline.scheduler.config.variance_type
-
-        if variance_type in ["learned", "learned_range"]:
-            variance_type = "fixed_small"
-
-        scheduler_args["variance_type"] = variance_type
-
-    pipeline.scheduler = DPMSolverMultistepScheduler.from_config(
-        pipeline.scheduler.config, **scheduler_args
-    )
-
-    pipeline = pipeline.to(accelerator.device)
-    pipeline.set_progress_bar_config(disable=True)
-
-    # run inference
-    generator = torch.Generator(device=accelerator.device).manual_seed(args.seed) if args.seed else None
-    pipeline_args = {"prompt": args.validation_prompt, "height": args.resolution, "width": args.resolution}
-
-    if args.validation_images is None:
-        images = []
-        for _ in range(args.num_validation_images):
-            with torch.cuda.amp.autocast():
-                image = pipeline(**pipeline_args, generator=generator).images[0]
-                images.append(image)
-    else:
-        images = []
-        for image in args.validation_images:
-            image = Image.open(image)
-            with torch.cuda.amp.autocast():
-                image = pipeline(**pipeline_args, image=image, generator=generator).images[0]
-            images.append(image)
-
-    num_images = len(images)
-    cols = math.ceil(math.sqrt(num_images))
-    rows = math.ceil(num_images / cols)
-
-    # 获取单张图像大小（假设所有图像大小相同）
-    w, h = images[0].size
-
-    # 创建一个空白大图用于拼接
-    grid_img = Image.new('RGB', (cols * w, rows * h))
-
-    # 将每张图粘贴到对应位置
-    for idx, img in enumerate(images):
-        col = idx % cols
-        row = idx // cols
-        grid_img.paste(img, (col * w, row * h))
-    grid_img = grid_img.resize((int(cols * w * 0.25), int(rows * h * 0.25)), Image.LANCZOS)
-
-    # 保存拼接后的图像
-    save_path = os.path.join(args.output_dir, "samples", f"validation_samples_{global_step}.png")
-    grid_img.save(save_path)
-    
-    del pipeline
-    torch.cuda.empty_cache()
 
 if __name__ == "__main__":
     args = parse_args()

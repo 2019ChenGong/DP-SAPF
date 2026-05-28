@@ -1419,10 +1419,11 @@ def main(args):
                         cos_sims = []
                         for param in get_params():
                             if param.grad is not None:
-                                noise = torch.randn_like(param.grad) * privacy_engine.noise_multiplier / accelerator.num_processes
-                                param.grad += noise
 
                                 if accelerator.is_main_process:
+                                    noise = torch.randn_like(param.grad) * privacy_engine.noise_multiplier
+                                    param.grad += noise
+
                                     cos_sim = torch.nn.functional.cosine_similarity(param.grad.flatten(), (param.grad - noise).flatten(), dim=0)
                                     cos_sims.append(cos_sim.item())
                         if accelerator.is_main_process:

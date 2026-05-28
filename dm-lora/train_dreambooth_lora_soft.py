@@ -1109,6 +1109,21 @@ def main(args):
         with open(os.path.join(args.output_dir, args.attn_keywords), "r") as f:
             args.attn_keywords = json.load(f)
 
+    # Detect soft-weight JSON: {module: {proj_letter: weight (float)}}.
+    # If so, every module participates in LoRA but each projection's parameters get a
+    # learning-rate scaled by its Fisher-derived weight.
+    soft_lora = (
+        isinstance(args.attn_keywords, dict)
+        and len(args.attn_keywords) > 0
+        and all(isinstance(v, dict) for v in args.attn_keywords.values())
+        and all(
+            isinstance(w, (int, float))
+            for v in args.attn_keywords.values() for w in v.values()
+        )
+    )
+    soft_param_groups = []  # filled when soft_lora is True
+    _proj_letter_to_attr = {"q": "to_q_lora", "k": "to_k_lora", "v": "to_v_lora", "o": "to_out_lora"}
+
     # Set correct lora layers
     unet_lora_attn_procs = {}
     unet_lora_parameters = []
@@ -1133,32 +1148,50 @@ def main(args):
             )
         
         if(args.adapter_type=="lora"):
-            if type(args.attn_keywords) == dict and name in args.attn_keywords and type(args.attn_keywords[name]) == list:
+            if (not soft_lora) and type(args.attn_keywords) == dict and name in args.attn_keywords and type(args.attn_keywords[name]) == list:
                 attn_update_unet = args.attn_keywords[name]
                 module = lora_attn_processor_class(
-                    hidden_size=hidden_size, 
-                    cross_attention_dim=cross_attention_dim, 
-                    adapter_type=args.adapter_type, # added 
-                    attn_update_unet=attn_update_unet, # added 
+                    hidden_size=hidden_size,
+                    cross_attention_dim=cross_attention_dim,
+                    adapter_type=args.adapter_type, # added
+                    attn_update_unet=attn_update_unet, # added
                     k_rank=args.unet_lora_rank_k if "k" in args.attn_update_unet else None, # k rank
-                    q_rank=args.unet_lora_rank_q if "q" in args.attn_update_unet else None, # added 
-                    v_rank=args.unet_lora_rank_v if "v" in args.attn_update_unet else None, # added 
-                    out_rank=args.unet_lora_rank_out if "o" in args.attn_update_unet else None, # added 
+                    q_rank=args.unet_lora_rank_q if "q" in args.attn_update_unet else None, # added
+                    v_rank=args.unet_lora_rank_v if "v" in args.attn_update_unet else None, # added
+                    out_rank=args.unet_lora_rank_out if "o" in args.attn_update_unet else None, # added
                 )
             else:
                 module = lora_attn_processor_class(
-                    hidden_size=hidden_size, 
-                    cross_attention_dim=cross_attention_dim, 
-                    adapter_type=args.adapter_type, # added 
-                    attn_update_unet=args.attn_update_unet, # added 
+                    hidden_size=hidden_size,
+                    cross_attention_dim=cross_attention_dim,
+                    adapter_type=args.adapter_type, # added
+                    attn_update_unet=args.attn_update_unet, # added
                     k_rank=args.unet_lora_rank_k if "k" in args.attn_update_unet else None, # k rank
-                    q_rank=args.unet_lora_rank_q if "q" in args.attn_update_unet else None, # added 
-                    v_rank=args.unet_lora_rank_v if "v" in args.attn_update_unet else None, # added 
-                    out_rank=args.unet_lora_rank_out if "o" in args.attn_update_unet else None, # added 
+                    q_rank=args.unet_lora_rank_q if "q" in args.attn_update_unet else None, # added
+                    v_rank=args.unet_lora_rank_v if "v" in args.attn_update_unet else None, # added
+                    out_rank=args.unet_lora_rank_out if "o" in args.attn_update_unet else None, # added
                 )
         else:
             raise AttributeError(f"{args.adapter_type} is not supported.")
-        if type(args.attn_keywords) == str:
+        if soft_lora:
+            # Every module trains all projections in args.attn_update_unet, but each
+            # projection's params get a per-module/per-projection LR multiplier.
+            proj_weights = args.attn_keywords.get(name, {}) if isinstance(args.attn_keywords, dict) else {}
+            for proj_letter in args.attn_update_unet:
+                attr = _proj_letter_to_attr.get(proj_letter)
+                if attr is None or not hasattr(module, attr):
+                    continue
+                w = float(proj_weights.get(proj_letter, 0.0))
+                sub_params = list(getattr(module, attr).parameters())
+                if w > 0:
+                    soft_param_groups.append({"params": sub_params, "lr": args.learning_rate * w})
+                    unet_lora_parameters.extend(sub_params)
+                    if accelerator.is_main_process:
+                        print(f"  soft  {name}.{proj_letter}: lr*= {w:.3f}")
+                else:
+                    for p in sub_params:
+                        p.requires_grad_(False)
+        elif type(args.attn_keywords) == str:
             if args.attn_keywords in name and (args.remove_attn_keywords is None or args.remove_attn_keywords not in name):
                 unet_lora_parameters.extend(module.parameters())
                 if accelerator.is_main_process:
@@ -1300,20 +1333,29 @@ def main(args):
         else args.learning_rate_text
     )
 
-    params_to_optimize = (
-        [
-            {
-                "params": itertools.chain(unet_lora_parameters), 
-                "lr": args.learning_rate
-            },
-            {
-                "params": itertools.chain(text_lora_parameters),
-                "lr": text_lr,
-            },
-        ]
-        if args.train_text_encoder
-        else itertools.chain(unet_lora_parameters)
-    )
+    if soft_lora and len(soft_param_groups) > 0:
+        # Per-projection LR multipliers from Fisher-derived soft weights.
+        if args.train_text_encoder:
+            params_to_optimize = soft_param_groups + [
+                {"params": list(itertools.chain(text_lora_parameters)), "lr": text_lr},
+            ]
+        else:
+            params_to_optimize = soft_param_groups
+    else:
+        params_to_optimize = (
+            [
+                {
+                    "params": itertools.chain(unet_lora_parameters),
+                    "lr": args.learning_rate
+                },
+                {
+                    "params": itertools.chain(text_lora_parameters),
+                    "lr": text_lr,
+                },
+            ]
+            if args.train_text_encoder
+            else itertools.chain(unet_lora_parameters)
+        )
 
     optimizer = optimizer_class(
         params_to_optimize,
