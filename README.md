@@ -145,6 +145,8 @@ Train DP-SAPF (example: CIFAR-10, 4 GPUs):
 bash scripts/script-dp-sapf.sh
 ```
 
+Note: For diffusers=0.21.0, you will get ImportError: cannot import name 'cached_download' from 'huggingface_hub' error. To solve it please remove the line from huggingface_hub import HfFolder, cached_download, hf_hub_download, model_info in dyanamic_models_utils.py script.
+
 <!-- Train baselines:
 
 ```bash
@@ -182,7 +184,7 @@ RQ2 uses `Stable-Diffusion-v1-5` as the public model and $\varepsilon=10.0$. We 
 - **Layer-Level**: performs layer-wise selection instead of matrix-wise selection.
 - **All Parameter**: applies saliency-aware selection to all fine-tunable parameter matrices (not only attention layers).
 
-Run each variant by setting:
+Run each variant:
 
 ```bash
 bash scripts/script-dp-sapf-all.sh
@@ -202,19 +204,19 @@ All RQ3 experiments use `Stable-Diffusion-v1-5`. Two sensitivity axes are evalua
 **Selection ratio** $c \in \{0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7\}$ under $\varepsilon=10.0$:
 
 ```bash
-bash script-dp-sapf-topk.sh
+bash scripts/script-dp-sapf-topk.sh
 ```
 
 **Privacy budget** $\varepsilon \in \{0.2, 1.0, 5.0, 10.0, 15.0, 20.0\}$:
 
 ```bash
-bash script-dp-sapf-eps.sh
+bash scripts/script-dp-sapf-eps.sh
 ```
 
 **Noise scale** $\sigma_s \in \{5.0, 10.0, 20.0, 25.0\}$:
 
 ```bash
-bash script-dp-sapf-sigma.sh
+bash scripts/script-dp-sapf-sigma.sh
 ```
 
 <!-- To compute RDP cost ratios (parameter-selection / DP-SGD):
@@ -230,7 +232,7 @@ For **Figure (fig:privacy_budget)**, please refer to `plot/plot_param_change.py`
 **Non-private setting** (*Table tab:no_dp* — DP-SAPF at $\varepsilon=\infty$):
 
 ```bash
-bash script-dp-sapf-nodp.sh
+bash scripts/script-dp-sapf-nodp.sh
 ```
 
 **Without fine-tuning** (*Table tab:no_finetuning* — public model zero-shot vs. DP-SAPF fine-tuned):
@@ -238,20 +240,20 @@ bash script-dp-sapf-nodp.sh
 Generate directly from the pretrained public model without any fine-tuning on sensitive data:
 
 ```bash
-bash script-dp-sapf-noft.sh
+bash scripts/script-dp-sapf-noft.sh
 ```
 
 **Transferability** (*Figure fig:dit* — DP-SAPF on DiT and alternative DP mechanisms EM / PTR):
 
 For DiT:
 ```bash
-bash script-dp-sapf-dit.sh
+bash scripts/script-dp-sapf-dit.sh
 ```
 
 For EM and PTR:
 ```bash
-bash script-dp-sapf-em.sh
-bash script-dp-sapf-ptr.sh
+bash scripts/script-dp-em.sh
+bash scripts/script-dp-ptr.sh
 ```
 
 For the transferability figure, please refer to `plot/plot_models_mechanism.py`.

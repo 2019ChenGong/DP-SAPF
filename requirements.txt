@@ -20,5 +20,7 @@ opencv-python
 diffusers==0.30.3
 test-tube==0.7.5
 gdown
+wilds
+medmnist
 git+https://github.com/marcojira/fld.git
 -e git+https://github.com/CompVis/taming-transformers.git@master#egg=taming-transformers

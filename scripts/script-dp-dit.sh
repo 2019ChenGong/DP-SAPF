@@ -1,5 +1,6 @@
+eval "$(conda shell.bash hook)"
 conda activate dplora
-cd gap/dm-lora/
+cd dm-lora
 
 subjects="celeba_male_256" # Subject Name
 data_path="../dataset/celeba/train_256_Male.zip"

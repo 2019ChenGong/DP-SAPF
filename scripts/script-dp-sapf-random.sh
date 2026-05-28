@@ -1,5 +1,6 @@
+eval "$(conda shell.bash hook)"
 conda activate dplora
-cd gap/dm-lora/
+cd dm-lora
 
 subjects="cifar10_32" # Subject Name
 data_path="../dataset/cifar10/train_32.zip"
@@ -7,7 +8,8 @@ model_resolution=256
 sensitive_resolution=32
 batch_size=4096
 gradient_accumulation_steps=16
-lower_name="base_top0.6_random"
+topk=0.3
+lower_name="base_top${topk}_random"
 fisher_batch_size=50000
 fisher_sigma=5.0
 eps=10
@@ -52,7 +54,7 @@ accelerate launch train_dreambooth_lora_fisher.py \
     --unet_lora_rank_q 4 \
     --unet_lora_rank_out 4 \
     --micro_batch_size 1 \
-    --top_k_lora=$top \
+    --top_k_lora=$topk \
     --random_selection
     # --fisher_remove_key="mid"
     # --variation_weight
