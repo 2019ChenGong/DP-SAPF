@@ -401,6 +401,7 @@ class PE(DPSynther):
         # Create a directory to store logs
         os.mkdir(config.log_dir)
         tmp_folder = config.tmp_folder
+        mode = 'pe' if 'mode' not in config else config.mode
 
         # Calculate the noise multiplier for differential privacy
         self.noise_factor = get_noise_multiplier(
@@ -502,8 +503,23 @@ class PE(DPSynther):
                         variation_degree=config.variation_degree_schedule[t],
                     )
 
+            # In augpe mode, flatten variations into an expanded candidate pool
+            if mode == 'augpe':
+                samples = packed_samples.reshape(-1, *packed_samples.shape[2:])
+                additional_info = np.repeat(additional_info, config.lookahead_degree, axis=0)
+                num_samples_per_class = samples.shape[0] // private_num_classes
+                logging.info('Running feature extraction (augpe)')
+                packed_features = extract_features(
+                    data=samples,
+                    tmp_folder=tmp_folder,
+                    num_workers=2,
+                    model_name=self.feature_extractor,
+                    res=config.private_image_size,
+                    batch_size=config.feature_extractor_batch_size
+                )
+
             # Extract features from the generated samples
-            if 'combine_variation_extraction' not in config or not config['combine_variation_extraction']:
+            if mode != 'augpe' and ('combine_variation_extraction' not in config or not config['combine_variation_extraction']):
                 packed_features = []
                 logging.info('Running feature extraction')
                 for i in range(packed_samples.shape[1]):
@@ -544,7 +560,7 @@ class PE(DPSynther):
             for class_i in range(private_num_classes):
                 visualize(
                     samples=samples[num_samples_per_class * class_i:num_samples_per_class * (class_i + 1)],
-                    packed_samples=packed_samples[num_samples_per_class * class_i:num_samples_per_class * (class_i + 1)] if 'combine_variation_extraction' not in config or not config['combine_variation_extraction'] else None,
+                    packed_samples=packed_samples[num_samples_per_class * class_i:num_samples_per_class * (class_i + 1)] if mode != 'augpe' and ('combine_variation_extraction' not in config or not config['combine_variation_extraction']) else None,
                     count=count[num_samples_per_class * class_i:num_samples_per_class * (class_i + 1)],
                     folder=f'{config.log_dir}/samples',
                     suffix=f'class{class_i}_iter{t}'
@@ -569,20 +585,21 @@ class PE(DPSynther):
             del samples
 
             # Generate new samples based on the selected indices
-            logging.info('Generating new samples')
+            if mode != 'augpe':
+                logging.info('Generating new samples')
 
-            chunk_size = 1000  # 根据 GPU 内存调整
-            N = len(new_samples)
-            for i in range(0, N, chunk_size):
-                # 生成变体（只处理这一小块）
-                variations = self.api.image_variation(
-                    images=new_samples[i:i+chunk_size],
-                    additional_info=additional_info[i:i+chunk_size],
-                    num_variations_per_image=1,
-                    size=config.image_size,
-                    variation_degree=config.variation_degree_schedule[t]
-                )  # shape: (B, 1, H, W, C) or (B, H, W, C)
-                new_samples[i:i+chunk_size] = np.squeeze(variations, axis=1)
+                chunk_size = 1000  # 根据 GPU 内存调整
+                N = len(new_samples)
+                for i in range(0, N, chunk_size):
+                    # 生成变体（只处理这一小块）
+                    variations = self.api.image_variation(
+                        images=new_samples[i:i+chunk_size],
+                        additional_info=additional_info[i:i+chunk_size],
+                        num_variations_per_image=1,
+                        size=config.image_size,
+                        variation_degree=config.variation_degree_schedule[t]
+                    )  # shape: (B, 1, H, W, C) or (B, H, W, C)
+                    new_samples[i:i+chunk_size] = np.squeeze(variations, axis=1)
 
             samples = new_samples
     
